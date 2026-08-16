@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#080D18">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ほたる合わせ">
+<title>ほたる合わせ — ひかりを あわせる ゲーム</title>
+<meta name="description" content="夏の夜の森。流れてくる蛍が目印を通る瞬間にタップする、ワンボタンの音ゲー。合わせた蛍は群れに残り、続けるほど森が同じ息で光りはじめます。ずかんと育成つき。">
+<meta name="author" content="くぅ">
+<meta name="color-scheme" content="dark">
+<link rel="canonical" href="https://kuuuu33.github.io/hotaru/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="くぅ">
+<meta property="og:title" content="ほたる合わせ">
+<meta property="og:description" content="流れてくる蛍が目印を通る瞬間にタップする、ワンボタンの音ゲー。合わせた蛍は群れに残り、続けるほど森が同じ息で光りはじめます。">
+<meta property="og:url" content="https://kuuuu33.github.io/hotaru/">
+<meta property="og:image" content="https://kuuuu33.github.io/hotaru/assets/ogp.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="夜の森で、たくさんの蛍が一斉に光っている画面">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ほたる合わせ">
+<meta name="twitter:description" content="流れてくる蛍が目印を通る瞬間にタップする、ワンボタンの音ゲー。続けるほど森が同じ息で光りはじめます。">
+<meta name="twitter:image" content="https://kuuuu33.github.io/hotaru/assets/ogp.jpg">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<style>
+  :root{
+    --bg-deep:#080D18;
+    --bg-mist:#0F1626;
+    --ink:#E8EDF5;
+    --ink-mute:#8A94A8;
+    --glow:#A8E86B;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{
+    width:100%;height:100%;overflow:hidden;
+    background:var(--bg-deep);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    user-select:none;-webkit-user-select:none;
+    overscroll-behavior:none;
+  }
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #bg{z-index:0}
+  #fg{z-index:1}
+  #ui{z-index:2}
+
+  /* 下端に置くものは top を JS が実測値で入れる。
+     iOS Safari は position:fixed の bottom も「URLバーを隠した高さ」基準になるので、
+     CSS だけで下端に置くと URLバーの裏に隠れて見えなくなる */
+  #band{
+    position:fixed;z-index:3;top:0;
+    left:calc(env(safe-area-inset-left) + 28px);
+    right:calc(env(safe-area-inset-right) + 28px);
+    height:2px;background:rgba(232,237,245,.07);border-radius:2px;pointer-events:none;
+  }
+  #bandFill{height:100%;width:0%;border-radius:2px;background:var(--glow);
+    box-shadow:0 0 10px rgba(168,232,107,.55);opacity:.75;transition:width .18s ease-out}
+
+  #count{
+    position:fixed;z-index:3;left:0;right:0;top:0;
+    text-align:center;font-size:12px;letter-spacing:.18em;text-indent:.18em;
+    color:var(--ink-mute);pointer-events:none;opacity:0;transition:opacity .4s ease;
+    font-variant-numeric:tabular-nums;
+  }
+  #count.on{opacity:.85}
+  #count b{color:var(--glow);font-weight:400;font-size:16px}
+
+  /* padding-top は JS が実測値で入れる。
+     vh を使うと iOS Safari では「URLバーを隠した高さ」で計算され、
+     実際の表示領域より下にタイトルが押し出されて見えなくなる */
+  #title{
+    position:fixed;inset:0;z-index:4;
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+    padding-top:52%;
+    gap:24px;pointer-events:none;transition:opacity 1s ease;
+  }
+  #title h1{font-size:26px;font-weight:400;letter-spacing:.42em;text-indent:.42em;
+    opacity:.92;text-shadow:0 0 24px rgba(168,232,107,.18)}
+  #title p{font-size:11px;letter-spacing:.34em;text-indent:.34em;color:var(--ink-mute);
+    animation:breathe 3.4s ease-in-out infinite}
+  @keyframes breathe{0%,100%{opacity:.30}50%{opacity:.72}}
+  #title.gone{opacity:0}
+  @media (prefers-reduced-motion: reduce){
+    #title p{animation:none;opacity:.5}
+  }
+
+  #result{
+    position:fixed;inset:0;z-index:4;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:30px;pointer-events:none;opacity:0;transition:opacity 1.6s ease;
+    text-align:center;
+  }
+  #result.on{opacity:1}
+  #result .r1{font-size:16px;letter-spacing:.40em;text-indent:.40em;opacity:.9}
+  #result .r2{font-size:13px;letter-spacing:.14em;color:var(--ink-mute)}
+  #result .r2 b{color:var(--glow);font-weight:400;font-size:26px;
+    font-variant-numeric:tabular-nums;padding:0 4px}
+  #result .r3{font-size:12px;letter-spacing:.20em;color:var(--ink-mute)}
+  #result .r3 b{color:var(--ink);font-weight:400}
+  #result .r4{font-size:11px;letter-spacing:.30em;text-indent:.30em;color:var(--ink-mute);
+    margin-top:14px;animation:breathe 3.4s ease-in-out infinite}
+
+  /* 中断。ゲーム中は画面のどこを叩いても判定なので、隅に小さく置いて
+     さらに2段階にする（1回目で確認に変わり、2回目で戻る） */
+  #quit{
+    position:fixed;z-index:6;
+    top:calc(env(safe-area-inset-top) + 10px);
+    left:calc(env(safe-area-inset-left) + 10px);
+    min-width:34px;height:34px;padding:0 12px;border:0;border-radius:17px;
+    background:rgba(232,237,245,.05);color:var(--ink-mute);
+    font-size:10px;letter-spacing:.14em;font-family:inherit;
+    opacity:.45;display:none;transition:opacity .2s ease,background .2s ease;
+  }
+  #quit.on{display:block}
+  #quit.ask{opacity:1;background:rgba(232,237,245,.14);color:var(--ink)}
+
+  /* 入口がボタンだと分かる形にする。前は文字だけで気づかれなかった */
+  #toMenu{
+    position:fixed;z-index:5;top:0;left:50%;transform:translateX(-50%);
+    padding:12px 24px;border:1px solid rgba(232,237,245,.24);border-radius:22px;
+    background:rgba(232,237,245,.07);color:var(--ink);
+    font-size:13px;letter-spacing:.20em;text-indent:.20em;opacity:.92;
+    font-family:inherit;transition:opacity .5s ease;white-space:nowrap;
+  }
+  #toMenu.hide{opacity:0;pointer-events:none}
+
+  #menu{
+    position:fixed;inset:0;z-index:7;display:none;flex-direction:column;
+    background:#080D18;   /* 半透明にすると下の光と文字が透けて読みにくい */
+    padding:calc(env(safe-area-inset-top) + 22px) 22px calc(env(safe-area-inset-bottom) + 22px);
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+  }
+  #menu.on{display:flex}
+  #menu .mhead{font-size:13px;letter-spacing:.08em;color:var(--ink);opacity:.85;margin-bottom:6px}
+  #menu .mhead b{color:var(--glow);font-weight:400;font-size:21px;font-variant-numeric:tabular-nums;
+    padding:0 3px}
+  #menu .mt{font-size:14px;letter-spacing:.26em;text-indent:.26em;color:var(--ink);
+    margin:30px 0 4px;padding-bottom:9px;border-bottom:1px solid rgba(232,237,245,.14)}
+  #menu .row{display:flex;align-items:center;gap:12px;padding:14px 0;font-size:14px;
+    color:var(--ink);border-bottom:1px solid rgba(232,237,245,.05)}
+  #menu .dot{width:11px;height:11px;border-radius:6px;flex:0 0 11px}
+  #menu .nm{color:var(--ink);flex:1;line-height:1.45}
+  #menu .sub{font-size:11.5px;display:block;color:#98A3B8;letter-spacing:.02em;margin-top:3px}
+  #menu .row.locked .nm{color:#98A3B8}
+  #menu .row.locked .sub{color:#6E7789}
+  #menu button.act{
+    border:1px solid rgba(168,232,107,.6);border-radius:9px;background:rgba(168,232,107,.08);
+    color:var(--glow);font-size:12.5px;padding:11px 15px;min-height:42px;
+    font-family:inherit;white-space:nowrap}
+  #menu button.act:disabled{border-color:rgba(232,237,245,.16);background:transparent;
+    color:#6E7789}
+  #menu button.act.cur{background:var(--glow);color:#080D18;border-color:var(--glow)}
+  #menu .lv{font-variant-numeric:tabular-nums;color:var(--glow);font-size:17px;
+    width:28px;text-align:right}
+  #menu .credit{margin:18px 0 6px;text-align:center;font-size:10.5px;line-height:1.9;
+    color:#6E7789;letter-spacing:.06em}
+  #mClose{margin:34px 0 8px;padding:16px;border:1px solid rgba(232,237,245,.26);border-radius:11px;
+    background:rgba(232,237,245,.05);color:var(--ink);font-size:13px;letter-spacing:.26em;
+    text-indent:.26em;font-family:inherit}
+
+  /* ── 工程②のデバッグUI（後の工程で削除する） ── */
+  #dbgBtn{position:fixed;z-index:6;
+    top:calc(env(safe-area-inset-top) + 10px);right:calc(env(safe-area-inset-right) + 10px);
+    width:34px;height:34px;border:0;border-radius:17px;
+    background:rgba(232,237,245,.05);color:var(--ink-mute);font-size:13px;opacity:.5}
+  #dbg{position:fixed;z-index:5;
+    top:calc(env(safe-area-inset-top) + 50px);right:calc(env(safe-area-inset-right) + 10px);
+    width:216px;max-height:78vh;overflow-y:auto;padding:12px;border-radius:12px;
+    background:rgba(8,13,24,.92);border:1px solid rgba(232,237,245,.10);
+    font-size:10px;line-height:1.6;color:var(--ink-mute);display:none}
+  #dbg.on{display:block}
+  #dbg .stat{color:var(--ink);margin-bottom:10px;font-variant-numeric:tabular-nums}
+  #dbg .stat b{color:var(--glow);font-weight:400}
+  #dbg .row{margin:7px 0}
+  #dbg .row label{display:flex;justify-content:space-between}
+  #dbg .row label span{color:var(--ink);font-variant-numeric:tabular-nums}
+  #dbg input[type=range]{width:100%;height:16px;accent-color:#A8E86B}
+  #dbg .btns{display:flex;gap:6px;margin-top:10px}
+  #dbg button{flex:1;padding:6px 4px;border:1px solid rgba(232,237,245,.14);
+    border-radius:7px;background:transparent;color:var(--ink-mute);font-size:10px}
+  #dbg button.on{color:#080D18;background:var(--glow);border-color:var(--glow)}
+  #hist{width:100%;height:44px;display:block;margin-top:8px;border-radius:6px;
+    background:rgba(232,237,245,.04)}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<canvas id="fg"></canvas>
+<canvas id="ui"></canvas>
+
+<div id="safe" style="position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top);pointer-events:none"></div>
+<div id="safeB" style="position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-bottom);pointer-events:none"></div>
+<div id="band"><div id="bandFill"></div></div>
+<div id="count"></div>
+
+<div id="title">
+  <h1>ほたる合わせ</h1>
+  <p>タップ</p>
+</div>
+
+<div id="result">
+  <div class="r1" id="r1">夜が明ける</div>
+  <div class="r2" id="r2"></div>
+  <div class="r3" id="r3"></div>
+  <div class="r4">── もういちど ──</div>
+</div>
+
+<button id="quit">やめる</button>
+<button id="toMenu">ずかん ・ 森</button>
+<div id="menu">
+  <div class="mhead">ひかり <b id="mLight">0</b></div>
+  <div class="mhead" style="font-size:12px;opacity:.6">いちばん多い夜　<b id="mBest" style="font-size:15px">0</b> 匹</div>
+  <div class="mt">ずかん</div><div id="mDex"></div>
+  <div class="mt">つよくする</div><div id="mGrow"></div>
+  <div class="mt">森のおく</div><div id="mStage"></div>
+  <button id="mClose">とじる</button>
+  <div class="credit">ほたる合わせ　制作 くぅ<br>音楽は Suno で制作しました</div>
+</div>
+
+<button id="dbgBtn" aria-label="debug">◦</button>
+<div id="dbg"></div>
+
+<script>
+"use strict";
+/* ===========================================================
+   ほたる合わせ ── 工程② コア（音ゲー版）
+   蛍が光を溜め、いちばん明るくなった瞬間にタップする1ボタンの音ゲー。
+   合わせた蛍は群れに残り、拍に合わせて一緒に光りはじめる＝「揃っていく」。
+
+   実装済み: 音声クロック / 譜面 / 判定 / 打鍵音 / 群れ / タイミング統計
+   未実装 : 命ゲージ・75秒・結果画面・ずかん・育成・ステージ・保存
+   =========================================================== */
+
+/* 曲。波形から実測した値（測り直したいときは §測定 のメモを参照）
+   BPM 91.000 / 1拍目 0.0107秒 / 1小節 2.6374秒 / Dm と C を1小節ずつ（Dドリアン） */
+const SONG = {
+  url    : "song.m4a",
+  bpm    : 91.000,
+  offset : 0.0107,   // 曲の先頭から1拍目までの秒数
+  bars   : 31,       // 使う小節数（31小節＝81.8秒）
+  vol    : 0.62,     // そのままだとゲームの音が埋もれるので下げる
+};
+const CHORDS_SONG = [
+  { name:"Dm", mel:[293.66, 349.23, 440.00, 523.25, 587.33] },  // D F A C D
+  { name:"C",  mel:[261.63, 329.63, 392.00, 493.88, 523.25] },  // C E G B C
+];
+
+const CFG = {
+  BPM      : 91,
+  CLICK    : 1,      // 曲に低音のキックが無いので、拍に薄いクリックを重ねられるようにする
+  SONG_ADJ : 0,      // 曲と譜面のズレの微調整(ms)。復号の先頭余白は環境で数ms動く
+  // 音と絵のずれ(ms)。＋で絵が遅れる＝音が先に聞こえるときに上げる。
+  // Safari は outputLatency を正しく返さないことが多く、自動では埋まらない。localStorageに残す
+  AV       : 0,
+  APPROACH : 1.50,   // ノーツが見えてから頂点までの秒数
+  W_PERFECT: 0.055,  // ぴたり ±55ms
+  W_GOOD   : 0.120,  // ちかい ±120ms
+  // 遅延は2種類あり、混ぜると自動較正が発散する（映像に合わせて叩くと補正が自分を追いかける）
+  //   LAT    …端末の音の出力遅延。音と絵を揃えるので描画と判定の両方をずらす。起動時に測って固定
+  //   OFFSET …その人の叩き癖。判定だけをずらす。ここだけを自動較正する
+  OFFSET   : 0,
+  AUTOCAL  : 1,      // 夜の最初の24打で叩き癖を自動で吸収する
+  SWARM_MAX: 90,     // 群れの上限（描画負荷の頭打ち。ふだんは届かない）
+  STAY     : 22,     // 合わせた蛍が群れに留まる秒数。これが「今夜◯匹」の釣り合いを決める
+  JITTER   : 0.055,  // 群れの明滅のばらつき(秒)。連続で合わせるほど縮む
+  VOL      : 0.5,
+  // ── 一夜（工程③）──
+  NIGHT    : 0,      // 夜の長さ(秒)。曲の小節数から決まる（起動時に入る）
+  LIFE_MAX : 100,    // 命の光。育成で増える（工程④）
+  L_PERFECT: 2.2,    // ぴたり
+  L_GOOD   : 0.8,    // ちかい
+  L_MISS   :-9.0,    // 見逃し
+  L_EMPTY  :-3.0,    // 空打ち
+  L_DRAIN  : 0.8,    // 毎秒の目減り。合わせ続けないと保たない
+  GRACE    : 9.0,    // 夜の最初の数秒は罰を4分の1に。初見が覚える前に死なないように
+};
+
+/* 種＝リズムの役割。「次の蛍までの間隔」で決まる。
+   仕様§5の「周期が違う＝合わせ方が違う＝別の遊び」を、音ゲーでは音価の違いとして持つ。
+   色が次のリズムの予告にもなっていて、譜面が読みやすくなる副作用がある */
+const SPECIES = [
+  { id:"genji_e", name:"ゲンジボタル（東）", gap:2.0,  col:[143,217,94],  need:4,  note:"2拍にひとつ" },
+  { id:"heike",   name:"ヘイケボタル",       gap:1.0,  col:[168,232,107], need:8,  note:"拍のうえ" },
+  { id:"umi",     name:"ウミホタル",         gap:1.5,  col:[158,224,240], need:6,  note:"付点ではねる" },
+  { id:"hime",    name:"ヒメボタル",         gap:0.5,  col:[232,245,160], need:10, note:"八分でつづく" },
+  { id:"kuromado",name:"クロマドボタル",     gap:0.25, col:[127,201,138], need:6,  note:"細かい裏" },
+  { id:"marebito",name:"まれびと",           gap:-1,   col:[240,230,138], need:2,  note:"まれに来る" },
+];
+const SPEC = {}; for (const s of SPECIES) SPEC[s.id] = s;
+
+/* ステージ＝譜面の難しさ。曲は共通。奥へ行くほどリズムの種類が増える（§11-4） */
+const STAGES = [
+  { id:"tanbo",  name:"田んぼ", need:0,    mult:1.00, subs:[2.0,1.0],
+    pats:["x...x...","x...x...","x.x.x.x.","x...x.x."] },
+  { id:"ogawa",  name:"小川",   need:60,  mult:1.10, subs:[2.0,1.0,0.5],
+    pats:["x.x.x.x.","x.x.xx..","x...x.x.","x.x.x.xx"] },
+  { id:"sugi",   name:"杉林",   need:200,  mult:1.22, subs:[2.0,1.0,1.5,0.5],
+    pats:["x.x.x.x.","x..x.x.x","x.x.xx..","xx.x.x.."] },
+  { id:"dokutsu",name:"洞窟",   need:450, mult:1.35, subs:[2.0,1.0,1.5,0.5,0.25],
+    pats:["x.x.x.xx","xx.x.x.x","x.xxx.x.","x.x.xx.x"] },
+  { id:"kakou",  name:"河口",   need:800, mult:1.50, subs:[2.0,1.0,1.5,0.5,0.25], drain:1.2,
+    pats:["xx.x.x.x","x.xxx.xx","xx.xx.x.","x.x.xxxx"] },
+];
+
+/* 育成（§6）。音ゲーでは「見やすさ」と「余裕」に効かせる */
+const GROW = {
+  power: { name:"光の強さ", note:"ぴたりの幅がひろがる", max:8 },
+  range: { name:"見とおし", note:"蛍が早くから見える",   max:8 },
+  life:  { name:"命の長さ", note:"光がながく保つ",       max:8 },
+};
+const growCost = lv => Math.round(25 * Math.pow(lv, 1.35));
+
+const BEAT = () => 60 / CFG.BPM;
+
+/* 保存（§6）。壊れていたら黙って初期値で始める。書くのは夜明けと育成のときだけ */
+const SAVE_KEY = "hotaru:save";
+const SAVE = { v:2, best:0, totalSync:0, light:0, stage:"tanbo",
+               grow:{power:1, range:1, life:1}, dex:{},
+               av:0, offset:0, songvol:SONG.vol, click:1 };
+function loadSave(){
+  try {
+    const s = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+    if (!s || s.v !== 2) return;
+    for (const k of ["best","totalSync","light"]) if (typeof s[k]==="number") SAVE[k]=s[k];
+    if (typeof s.stage === "string" && STAGES.some(g=>g.id===s.stage)) SAVE.stage = s.stage;
+    if (s.grow) for (const k in SAVE.grow)
+      if (typeof s.grow[k]==="number") SAVE.grow[k]=Math.max(1,Math.min(GROW[k].max,s.grow[k]|0));
+    if (s.dex && typeof s.dex==="object") for (const k in s.dex) if (SPEC[k]) SAVE.dex[k]=String(s.dex[k]);
+    for (const k of ["av","offset","songvol","click"]) if (typeof s[k]==="number") SAVE[k]=s[k];
+  } catch(e){}
+  CFG.AV = SAVE.av; CFG.OFFSET = SAVE.offset;
+  SONG.vol = SAVE.songvol; CFG.CLICK = SAVE.click;
+}
+function saveNow(){
+  SAVE.av = Math.round(CFG.AV); SAVE.offset = Math.round(CFG.OFFSET);
+  SAVE.songvol = +SONG.vol.toFixed(2); SAVE.click = CFG.CLICK;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch(e){}
+}
+const stageOf = id => STAGES.find(s=>s.id===id) || STAGES[0];
+const stageOpen = s => SAVE.totalSync >= s.need;
+loadSave();
+
+/* ---- 画面 ---- */
+const bg = document.getElementById("bg"), bgx = bg.getContext("2d");
+const fg = document.getElementById("fg"), fgx = fg.getContext("2d");
+const ui = document.getElementById("ui"), uix = ui.getContext("2d");
+let W = 0, H = 0, DPR = 1, safeTop = 0, safeBottom = 0;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function resize(){
+  DPR = Math.min(devicePixelRatio || 1, 2.5);
+  W = innerWidth; H = innerHeight;
+  const sp = document.getElementById("safe"), sb = document.getElementById("safeB");
+  safeTop    = sp ? sp.getBoundingClientRect().height : 0;
+  safeBottom = sb ? sb.getBoundingClientRect().height : 0;
+  for (const c of [bg, fg, ui]){ c.width = Math.round(W*DPR); c.height = Math.round(H*DPR); }
+  for (const x of [bgx, fgx, uix]) x.setTransform(DPR,0,0,DPR,0,0);
+  drawBg(dawnStep > 0 ? dawnStep/40 : 0);
+  fgx.clearRect(0,0,W,H);
+  layoutLane();
+  // タイトルは見本の通り道の下へ。実測の H から出すので端末差で消えない
+  const te = document.getElementById("title");
+  if (te) te.style.paddingTop = Math.round(Math.min(laneY + 104, H - 190)) + "px";
+
+  // 下端に置くものも実測の H から。CSS の bottom は iOS で当てにならない
+  const bot = H - safeBottom;
+  const set = (id, y) => { const el = document.getElementById(id); if (el) el.style.top = Math.round(y) + "px"; };
+  set("band",   bot - 26);
+  set("count",  bot - 54);
+  set("toMenu", bot - 108);
+}
+let dawnStep = -1;
+// dawn 0〜1。毎フレームは呼ばない（グラデ生成が重いので段階が変わったときだけ）
+function drawBg(dawn){
+  dawn = dawn || 0;
+  bgx.setTransform(DPR,0,0,DPR,0,0);
+  bgx.fillStyle = "#080D18"; bgx.fillRect(0,0,W,H);
+  const g = bgx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"rgba(15,22,38,0.55)");
+  g.addColorStop(0.55,"rgba(15,22,38,0.00)");
+  g.addColorStop(1,"rgba(15,22,38,0.75)");
+  bgx.fillStyle = g; bgx.fillRect(0,0,W,H);
+  if (dawn > 0){
+    const d = bgx.createLinearGradient(0,H*0.62,0,H);
+    d.addColorStop(0,"rgba(64,58,52,0)");
+    d.addColorStop(1,`rgba(96,84,62,${(0.42*dawn).toFixed(3)})`);
+    bgx.fillStyle = d; bgx.fillRect(0,H*0.62,W,H*0.38);
+  }
+  drawGrass();
+}
+
+/* 下部の草のシルエット。形は起動時に決めて、以後は同じものを描く */
+let grass = null;
+function makeGrass(){
+  grass = [];
+  let seed = 20260816;
+  const rnd = () => (seed = (seed*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let i = 0; i < 46; i++){
+    grass.push({ x: rnd()*1.06 - 0.03, h: 0.06 + rnd()*0.13, w: 1.2 + rnd()*1.8,
+                 lean: (rnd()-0.5)*0.9, ph: rnd()*Math.PI*2 });
+  }
+}
+function drawGrass(){
+  if (!grass) makeGrass();
+  bgx.strokeStyle = "#0F1626";
+  bgx.lineCap = "round";
+  for (const g of grass){
+    const x = g.x*W, h = g.h*H;
+    bgx.lineWidth = g.w;
+    bgx.beginPath();
+    bgx.moveTo(x, H);
+    bgx.quadraticCurveTo(x + g.lean*22, H - h*0.6, x + g.lean*46, H - h);
+    bgx.stroke();
+  }
+  bgx.lineCap = "butt";
+}
+
+/* ---- 光球スプライト（起動時に焼く） ---- */
+const SPR = 128, SPR_R = SPR/2;
+function bakeSprite(r,g,b){
+  const cv = document.createElement("canvas"); cv.width = cv.height = SPR;
+  const c = cv.getContext("2d");
+  const gr = c.createRadialGradient(SPR_R,SPR_R,0, SPR_R,SPR_R,SPR_R);
+  gr.addColorStop(0.00,"rgba(255,255,255,1)");
+  gr.addColorStop(0.08,`rgba(${(r+510)/3|0},${(g+510)/3|0},${(b+510)/3|0},0.85)`);
+  gr.addColorStop(0.22,`rgba(${r},${g},${b},0.34)`);
+  gr.addColorStop(0.48,`rgba(${r},${g},${b},0.09)`);
+  gr.addColorStop(1.00,`rgba(${r},${g},${b},0.00)`);
+  c.fillStyle = gr; c.fillRect(0,0,SPR,SPR);
+  return cv;
+}
+const sprGlow = bakeSprite(168,232,107);   // ふつうの蛍
+const sprWarm = bakeSprite(214,245,150);   // ぴたりで合わせた蛍（わずかに温かい）
+const sprMiss = bakeSprite(120,140,170);   // 見逃した蛍
+for (const s of SPECIES) s.spr = bakeSprite(s.col[0], s.col[1], s.col[2]);
+
+/* 霧。発光用スプライトは芯が強すぎて四角い塊に見えるので、専用になだらかなものを焼く */
+const sprFog = (() => {
+  const S = 256, cv = document.createElement("canvas");
+  cv.width = cv.height = S;
+  const c = cv.getContext("2d");
+  const g = c.createRadialGradient(S/2,S/2,0, S/2,S/2,S/2);
+  g.addColorStop(0.00,"rgba(190,206,228,0.42)");
+  g.addColorStop(0.35,"rgba(190,206,228,0.24)");
+  g.addColorStop(0.65,"rgba(190,206,228,0.08)");
+  g.addColorStop(0.85,"rgba(190,206,228,0.02)");
+  g.addColorStop(1.00,"rgba(190,206,228,0.00)");
+  c.fillStyle = g; c.fillRect(0,0,S,S);
+  return cv;
+})();
+const sprOf = id => (SPEC[id] && SPEC[id].spr) || sprGlow;
+
+/* ===========================================================
+   音（Web Audio。合成のみ・音声ファイルなし）
+   時刻の基準は AudioContext.currentTime。rAF は描画にしか使わない
+   =========================================================== */
+let actx = null, t0 = 0, playing = false;
+let master = null, delay = null, noiseBuf = null;
+let musicGain = null, songSrc = null;
+
+/* 曲の読み込み。ページを開いた時点で取りに行き、最初のタップで復号する
+   （AudioContext は操作があるまで作れないため）。失敗したら合成の伴奏に戻す */
+let songAB = null, songBuf = null, songState = "loading";   // loading / ready / failed
+fetch(SONG.url).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status)))
+  .then(ab => { songAB = ab; })
+  .catch(() => { songState = "failed"; });
+let LAT = 0;                        // 端末の出力遅延(秒)。起動時に一度だけ決めて動かさない
+
+/* 和音進行。Am → F → C → G を2小節ずつ。夏の夜に合う静かな循環 */
+const CHORDS = [
+  { bass:110.00, tri:[220.00, 261.63, 329.63], arp:[440.00, 523.25, 659.26, 523.25] }, // Am
+  { bass: 87.31, tri:[174.61, 220.00, 261.63], arp:[349.23, 440.00, 523.25, 440.00] }, // F
+  { bass:130.81, tri:[261.63, 329.63, 392.00], arp:[523.25, 659.26, 784.00, 659.26] }, // C
+  { bass: 98.00, tri:[196.00, 246.94, 293.66], arp:[392.00, 493.88, 587.33, 493.88] }, // G
+];
+const SCALE = [0, 3, 5, 7, 10, 12, 15, 17];      // Aマイナー・ペンタトニック
+const ROOT  = 220;                                // A3
+const freq = i => ROOT * Math.pow(2, SCALE[((i%SCALE.length)+SCALE.length)%SCALE.length]/12) * (i<0?0.5:1);
+
+function ensureAudio(){
+  if (actx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  actx = new AC();
+  master = actx.createGain();
+  master.gain.value = CFG.VOL;
+  master.connect(actx.destination);
+  musicGain = actx.createGain();          // 曲は別系統。ゲームの音とは独立に上下させる
+  musicGain.gain.value = SONG.vol;
+  musicGain.connect(actx.destination);
+  // 付点8分のディレイ。合成音でも「空間」が出て曲らしく聞こえる
+  delay = actx.createDelay(1.0);
+  delay.delayTime.value = BEAT() * 0.75;
+  const fb = actx.createGain(); fb.gain.value = 0.30;
+  const wet = actx.createGain(); wet.gain.value = 0.55;
+  delay.connect(fb); fb.connect(delay);
+  delay.connect(wet); wet.connect(master);
+
+  // ハイハット用のノイズ（1回だけ作る）
+  const n = Math.floor(actx.sampleRate * 0.12);
+  noiseBuf = actx.createBuffer(1, n, actx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/n, 3);
+
+  // 出力遅延（iOSでは100msを超えることがある）。音と絵はこれで揃える
+  const lat = actx.outputLatency || actx.baseLatency || 0;
+  LAT = (isFinite(lat) && lat > 0 && lat < 0.4) ? lat : 0;
+
+  if (songAB && songState === "loading"){
+    actx.decodeAudioData(songAB.slice(0))
+      .then(b => { songBuf = b; songState = "ready"; })
+      .catch(() => { songState = "failed"; });
+  }
+}
+function tone(at, f, dur, type, gain, send, attack){
+  if (!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.value = f;
+  const a = attack || 0.008;
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(gain, at + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  o.connect(g); g.connect(master);
+  if (send && delay){ const s = actx.createGain(); s.gain.value = send; g.connect(s); s.connect(delay); }
+  o.start(at); o.stop(at + dur + 0.02);
+}
+function hat(at, gain){
+  if (!actx || !noiseBuf) return;
+  const s = actx.createBufferSource(); s.buffer = noiseBuf;
+  const f = actx.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 7000;
+  const g = actx.createGain(); g.gain.value = gain;
+  s.connect(f); f.connect(g); g.connect(master);
+  s.start(at); s.stop(at + 0.12);
+}
+function thump(at){
+  if (!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = "sine";
+  o.frequency.setValueAtTime(110, at);
+  o.frequency.exponentialRampToValueAtTime(55, at + 0.10);
+  g.gain.setValueAtTime(0.22, at);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + 0.22);
+  o.connect(g); g.connect(master);
+  o.start(at); o.stop(at + 0.25);
+}
+
+/* performance.now() と AudioContext.currentTime の対応をゆっくり追う。
+   タッチイベントの e.timeStamp（＝指が触れた瞬間）を音の時刻へ変換するために要る。
+   ハンドラ実行時に currentTime を読むと、イベント配送の遅れがそのまま判定のズレになる */
+let skew = 0, skewOK = false;
+function syncClock(){
+  const s = actx.currentTime - performance.now()/1000;
+  if (!skewOK){ skew = s; skewOK = true; }
+  else skew += (s - skew) * 0.05;
+}
+function tapAudioTime(e){
+  const ts = e && e.timeStamp;
+  if (skewOK && typeof ts === "number" && ts > 0 && ts < 1e11){
+    const a = ts/1000 + skew;
+    if (Math.abs(a - actx.currentTime) < 0.5) return a;   // 妥当な範囲のときだけ使う
+  }
+  return actx.currentTime;
+}
+
+/* 曲。8分刻みで組み立てる。旋律だけは空けてあり、そこはプレイヤーが弾く。
+   最初の1小節はカウント、5小節目からアルペジオ、13小節目からハイハットが入る */
+function musicStep(i, at){
+  const s = i % 8;                       // 小節内の8分の位置
+  const bar = Math.floor(i / 8);
+
+  // 曲を鳴らしているときは伴奏を作らない。
+  // ただしこの曲には低音のキックが無いので、拍のクリックだけ薄く重ねられるようにしておく
+  if (songSrc){
+    if (bar === 0){ if (s % 2 === 0) tone(at, 1320, 0.07, "triangle", 0.10); return; }
+    if (CFG.CLICK && (s === 0 || s === 4)) tone(at, 990, 0.045, "triangle", 0.030);
+    return;
+  }
+
+  const ch = CHORDS[Math.floor(bar/2) % CHORDS.length];
+
+  // カウントイン（最初の1小節）。速さを体に入れてもらう
+  if (bar === 0){
+    if (s % 2 === 0){ thump(at); tone(at, 1320, 0.07, "triangle", 0.12); }
+    return;
+  }
+
+  // 拍の頭。低音と、耳で数えるための短い高音
+  if (s === 0 || s === 4){
+    thump(at);
+    tone(at, 990, 0.05, "triangle", 0.040);
+    tone(at, ch.bass, 0.60, "sine", 0.105, 0, 0.012);
+  }
+  if (s === 2 || s === 6) tone(at, 990, 0.04, "triangle", 0.022);
+
+  // パッド：小節頭でやわらかく和音を置く
+  if (s === 0) for (const f of ch.tri) tone(at, f, 2.3, "sine", 0.026, 0.18, 0.25);
+
+  // アルペジオ：曲の動き。8分で回す
+  if (bar >= 5) tone(at, ch.arp[i % ch.arp.length], 0.30, "triangle", 0.030, 0.35);
+
+  // ハイハット
+  if (bar >= 13) hat(at, s % 2 === 0 ? 0.028 : 0.016);
+
+  // 揃った蛍が多いほど、上に薄い和音が重なる（森が鳴っている感じ）
+  const n = swarm.length;
+  if (s === 0 && n > 8)  tone(at, ch.tri[0]*2, 1.8, "sine", 0.016 * Math.min(n/45,1), 0.3, 0.4);
+  if (s === 4 && n > 26) tone(at, ch.tri[2]*2, 1.8, "sine", 0.014 * Math.min(n/60,1), 0.3, 0.4);
+}
+
+/* 先読みスケジューラ */
+let schedStep = 0, schedTimer = 0;
+function scheduler(){
+  if (!actx) return;
+  syncClock();
+  if (!playing) return;
+  const step = BEAT()/2, ahead = 0.25;
+  while (schedStep * step < actx.currentTime - t0 + ahead){
+    const at = t0 + schedStep * step;
+    if (at > actx.currentTime) musicStep(schedStep, at);
+    schedStep++;
+  }
+}
+
+/* ===========================================================
+   譜面
+   =========================================================== */
+/* 出だしはどのステージでも薄い。覚える前に殺さない */
+const EASY = "x...x...";
+const MID  = "x.x.x.x.";
+
+// 蛍は右から一定の速さで流れてきて、左の「目印」を通過する瞬間がタップ時刻。
+// 縮む輪をやめた理由：重なる瞬間が知覚的に弱く、複数あるとどれが次か分からない。
+// 直線運動なら到達時刻を目で正確に読めるうえ、蛍の間隔がそのままリズムに見える
+let laneY = 0, markX = 0, spawnX = 0;
+const MARK_R = 16;
+
+let notes = [];
+function layoutLane(){
+  laneY  = H*0.44;
+  markX  = W*0.30;
+  spawnX = W + 30;
+}
+const noteX = (nt, t) => markX + (nt - t) * ((spawnX - markX)/CFG.APPROACH);
+
+function buildChart(){
+  notes = [];
+  layoutLane();
+  const st = stageOf(SAVE.stage);
+  const beat = BEAT(), step = beat/2;      // 8分グリッド
+  const bars = Math.ceil(CFG.NIGHT / (beat*4)) + 1;
+  for (let bar = 0; bar < bars; bar++){
+    const pat = bar < 3 ? EASY : bar < 7 ? MID : st.pats[(bar-7) % st.pats.length];
+    for (let s = 0; s < 8; s++){
+      if (pat[s] !== "x") continue;
+      const t = bar*4*beat + s*step + COUNTIN*beat;   // 頭に4拍のカウントを置く
+      if (t > CFG.NIGHT - 1.2){ assignSpecies(st); return; }
+      notes.push({ t, judged:0, mel:notes.length });
+    }
+  }
+  assignSpecies(st);
+}
+
+/* 種を割り当てる。次の蛍までの間隔＝その蛍がどう叩かれるかなので、
+   色を見れば「次がどれくらい速いか」が分かる */
+function assignSpecies(st){
+  const beat = BEAT();
+  for (let i = 0; i < notes.length; i++){
+    const gapT = (i+1 < notes.length ? notes[i+1].t - notes[i].t
+                                     : notes[i].t - (notes[i-1]||notes[i]).t) / beat;
+    // ステージで許された音価のうち、いちばん近いもの
+    let bestId = "heike", bestD = 1e9;
+    for (const s of SPECIES){
+      if (s.gap < 0 || !st.subs.includes(s.gap)) continue;
+      const d = Math.abs(Math.log(gapT/s.gap));
+      if (d < bestD){ bestD = d; bestId = s.id; }
+    }
+    notes[i].sp = bestId;
+  }
+  // まれびと。6%でどれかが置き換わる（連続はさせない）
+  for (let i = 1; i < notes.length-1; i++){
+    if (Math.random() < 0.06 && notes[i-1].sp !== "marebito") notes[i].sp = "marebito";
+  }
+}
+const COUNTIN = 4;   // 最初の4拍は数えるだけ。速さを体に入れてから始める
+
+/* ===========================================================
+   群れ（合わせた蛍がここに残り、拍に合わせて一緒に光る）
+   =========================================================== */
+let swarm = [];
+function joinSwarm(perfect, spId){
+  // 合わせた蛍は森のどこかに散る（ノーツの出る場所を塞がないように中央は避ける）
+  let x, y, tries = 0;
+  do {
+    x = 40 + Math.random()*(W-80);
+    y = 70 + Math.random()*(H-190);
+  } while (Math.abs(y - laneY) < 76 && ++tries < 12);   // 蛍の通り道は空けておく
+  swarm.push({
+    x, y,
+    dir: Math.random()*Math.PI*2,
+    spd: 8 + Math.random()*12,
+    wob: Math.random()*Math.PI*2,
+    off: (Math.random()*2-1),      // 明滅のずれ（JITTERで倍率がかかる）
+    // 合わせた蛍もいつかは離れていく。これが無いと数が単調に増えて上限に張り付き、
+    // 「今夜◯匹」が腕前ではなく上限値になってしまう
+    life: CFG.STAY * (perfect ? 1.15 : 0.85) * (0.85 + Math.random()*0.3),
+    perfect, spr: sprOf(spId),
+    lastBeat: -1, tf: 99,
+  });
+  if (swarm.length > CFG.SWARM_MAX) swarm.shift();
+}
+
+/* ===========================================================
+   状態
+   =========================================================== */
+let combo = 0, best = 0, nPerfect = 0, nGood = 0, nMiss = 0;
+const offsets = [];                 // 判定ごとのズレ(ms)。較正に使う
+let flash = { t:-9, kind:0 };       // 判定表示
+let hits = [];                      // 命中の弾け
+let life = 0, peakSwarm = 0;
+let scene = "title";                // title / play / result
+let resultAt = 0;                   // 結果画面を出した実時刻（誤爆防止）
+let spRun = {}, newDex = [];
+const todayStr = () => { const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+
+const songTime = () => actx ? (actx.currentTime - t0) : 0;
+// 音が耳に届く瞬間に絵を合わせる。端末の出力遅延＋手動のずれ補正。
+// OFFSET（叩き癖）はここには効かせない（効かせると自動較正が発散する）
+const latency = () => LAT + CFG.AV/1000;
+const now = () => songTime() - latency();
+
+/* ---- 一夜の開始と終わり ---- */
+const titleEl  = document.getElementById("title");
+const resultEl = document.getElementById("result");
+const countEl2 = document.getElementById("count");
+
+function startNight(){
+  notes = []; swarm = []; hits = []; offsets.length = 0;
+  combo = 0; best = 0; nPerfect = nGood = nMiss = 0;
+  // 育成の効果（§6）。見やすさと余裕に効く
+  const g = SAVE.grow;
+  CFG.W_PERFECT = 0.055 + (g.power-1) * 0.0043;   // Lv8で ±85ms
+  CFG.APPROACH  = 1.50  + (g.range-1) * 0.10;     // Lv8で 2.2秒
+  CFG.LIFE_MAX  = 100   + (g.life -1) * 11.4;     // Lv8で 180
+  const st = stageOf(SAVE.stage);
+  CFG.L_DRAIN = 0.8 * (st.drain || 1);
+  spRun = {}; newDex = [];
+
+  life = CFG.LIFE_MAX; peakSwarm = 0;
+  dawnStep = -1; drawBg(0);
+  fgx.clearRect(0,0,W,H);
+
+  // 曲があれば、曲の1拍目を音楽時刻ゼロに合わせて鳴らす
+  if (songSrc){ try { songSrc.stop(); } catch(e){} songSrc = null; }
+  if (songBuf){
+    CFG.BPM  = SONG.bpm;
+    CFG.NIGHT = SONG.bars * 4 * (60/SONG.bpm);
+    const startAt = actx.currentTime + 0.6;
+    songSrc = actx.createBufferSource();
+    songSrc.buffer = songBuf;
+    songSrc.connect(musicGain);
+    songSrc.start(startAt);
+    t0 = startAt + SONG.offset + CFG.SONG_ADJ/1000;   // ここが音楽時刻の原点
+  } else {
+    CFG.NIGHT = 75;
+    t0 = actx.currentTime + 1.0;
+  }
+  buildChart();
+  schedStep = 0;
+  clearInterval(schedTimer);
+  schedTimer = setInterval(scheduler, 25);
+  playing = true; scene = "play";
+  titleEl.classList.add("gone");
+  resultEl.classList.remove("on");
+  countEl2.classList.add("on");
+  toMenu.classList.add("hide");
+  quitEl.classList.add("on"); quitEl.classList.remove("ask");
+  quitEl.textContent = "やめる";
+  askAt = 0;
+  closeMenu();
+}
+
+function endNight(reason){
+  playing = false; scene = "result";
+  clearInterval(schedTimer);
+  resultAt = performance.now();
+  const at = actx.currentTime + 0.05;
+  if (songSrc){
+    // 曲はその場で終わらせず、2.5秒かけて引く（ぶつ切りにしない）
+    try {
+      musicGain.gain.setValueAtTime(musicGain.gain.value, at);
+      musicGain.gain.linearRampToValueAtTime(0.0001, at + 2.5);
+      songSrc.stop(at + 2.6);
+    } catch(e){}
+    songSrc = null;
+    setTimeout(() => { if (musicGain) musicGain.gain.value = SONG.vol; }, 3200);
+    // 夜明けの和音は曲のキー（Dドリアン）で
+    for (const f of [293.66, 349.23, 440.00]) tone(at, f, 3.4, "sine", 0.05, 0.3, 0.3);
+    tone(at, 146.83, 3.8, "sine", 0.05, 0, 0.2);
+  } else {
+    for (const f of CHORDS[0].tri) tone(at, f, 3.4, "sine", 0.055, 0.3, 0.3);
+    tone(at, CHORDS[0].tri[0]*2, 3.0, "triangle", 0.03, 0.4, 0.4);
+    tone(at, CHORDS[0].bass, 3.8, "sine", 0.05, 0, 0.2);
+  }
+
+  const tot = nPerfect + nGood + nMiss;
+  const acc = tot ? nPerfect/tot : 0;
+  const st  = stageOf(SAVE.stage);
+  // 倍率＝精度（40%で1.0、100%で2.0）× ステージ係数。奥へ行くこと自体が賭けになる
+  const mult = Math.max(1, Math.min(2, 1 + (acc-0.4)/0.6)) * st.mult;
+  const light = Math.round(peakSwarm * mult);
+
+  SAVE.best = Math.max(SAVE.best, peakSwarm);
+  SAVE.totalSync += peakSwarm;
+  SAVE.light += light;
+
+  document.getElementById("r1").textContent =
+    reason === "life" ? "光が尽きた" : "夜が明ける";
+  document.getElementById("r2").innerHTML =
+    `今夜、<b>${peakSwarm}</b>匹が同じ息で光った`;
+  let r3 = `${st.name} <b>×${mult.toFixed(2)}</b>　ひかり <b>+${light}</b>`;
+  if (newDex.length) r3 += `<br><span style="color:#A8E86B">${newDex.map(id=>SPEC[id].name).join("、")} をおぼえた</span>`;
+  const opened = STAGES.find(s => s.need > 0 && SAVE.totalSync >= s.need && SAVE.totalSync - peakSwarm < s.need);
+  if (opened) r3 += `<br><span style="color:#A8E86B">${opened.name} への道がひらけた</span>`;
+  document.getElementById("r3").innerHTML = r3;
+  resultEl.classList.add("on");
+  countEl2.classList.remove("on");
+  toMenu.classList.remove("hide");
+  quitEl.classList.remove("ask");
+  quitEl.textContent = "タイトルへ";       // 結果画面からも戻れるように
+  saveNow();      // 保存は夜明け時と育成のときだけ。毎フレーム書かない
+}
+
+/* 夜を捨ててタイトルへ戻す。捨てた夜は記録しない（ひかりも累計も増えない）。
+   ただし合わせ込んだ設定は残す */
+const quitEl = document.getElementById("quit");
+let askAt = 0;
+function toTitle(){
+  clearInterval(schedTimer);
+  playing = false; scene = "title";
+  if (songSrc){ try { songSrc.stop(); } catch(e){} songSrc = null; }
+  if (musicGain) musicGain.gain.value = SONG.vol;
+  notes = []; swarm = []; hits = []; offsets.length = 0;
+  combo = 0; best = 0; nPerfect = nGood = nMiss = 0;
+  life = 0; peakSwarm = 0; spRun = {}; newDex = [];
+  dawnStep = -1; drawBg(0); fgx.clearRect(0,0,W,H);
+  titleEl.classList.remove("gone");
+  resultEl.classList.remove("on");
+  countEl2.classList.remove("on");
+  toMenu.classList.remove("hide");
+  quitEl.classList.remove("on","ask");
+  quitEl.textContent = "やめる";
+  closeMenu();
+  saveNow();
+}
+function onQuit(){
+  if (scene === "result"){ toTitle(); return; }      // 失うものが無いので確認しない
+  if (scene !== "play") return;
+  if (performance.now() - askAt < 2500){ toTitle(); return; }
+  askAt = performance.now();
+  quitEl.textContent = "やめる？";
+  quitEl.classList.add("ask");
+  setTimeout(() => {
+    if (performance.now() - askAt >= 2400 && scene === "play"){
+      quitEl.textContent = "やめる"; quitEl.classList.remove("ask");
+    }
+  }, 2500);
+}
+quitEl.addEventListener("click", e => { e.stopPropagation(); onQuit(); });
+quitEl.addEventListener("touchstart", e => { e.stopPropagation(); }, {passive:true});
+
+/* ---- 入力 ---- */
+function onTap(ev){
+  ensureAudio();
+  if (actx.state === "suspended") actx.resume();
+  if (scene === "title"){
+    // 曲の復号が終わっていなければ待ってから始める（合成の伴奏で始めてしまわないように）
+    if (songState === "loading"){
+      titleEl.querySelector("p").textContent = "よみこみ中";
+      const wait = setInterval(() => {
+        if (songState !== "loading"){
+          clearInterval(wait);
+          titleEl.querySelector("p").textContent = "タップ";
+          startNight();
+        }
+      }, 60);
+      return;
+    }
+    startNight(); return;
+  }
+  if (scene === "result"){
+    if (performance.now() - resultAt > 900) startNight();   // 終了時の一打で即再開しない
+    return;
+  }
+  const at = tapAudioTime(ev) - t0 - latency() - CFG.OFFSET/1000;
+  judge(at, tapX, tapY);
+}
+let tapX = 0, tapY = 0;
+addEventListener("touchstart", e => {
+  if (e.target.closest("#dbg,#dbgBtn,#menu,#toMenu,#quit")) return;
+  const t = e.changedTouches[0]; tapX = t.clientX; tapY = t.clientY;
+  onTap(e); e.preventDefault();
+}, {passive:false});
+addEventListener("mousedown",  e => {
+  if (e.target.closest("#dbg,#dbgBtn,#menu,#toMenu,#quit")) return;
+  tapX = e.clientX; tapY = e.clientY; onTap(e);
+});
+addEventListener("contextmenu", e => e.preventDefault());
+
+/* ---- 判定 ---- */
+function judge(tapT, tx, ty){
+  let hit = null, bestD = 1e9;
+  for (const n of notes){
+    if (n.judged) continue;
+    const d = tapT - n.t;
+    if (d < -CFG.W_GOOD*2) break;          // 譜面は時刻順。これ以降は遠い
+    if (Math.abs(d) < Math.abs(bestD)){ bestD = d; hit = n; }
+  }
+  if (!hit || Math.abs(bestD) > CFG.W_GOOD){
+    // 空打ち。減点はしない（命ゲージは工程③）が、打った手応えは必ず返す
+    if (tx != null) hits.push({ x:tx, y:ty, t:now(), perfect:false, empty:true });
+    tone(actx.currentTime + 0.005, ROOT/2, 0.12, "sine", 0.035);
+    life += CFG.L_EMPTY * (tapT < CFG.GRACE ? 0.25 : 1);
+    return;
+  }
+  const perfect = Math.abs(bestD) <= CFG.W_PERFECT;
+  hit.judged = perfect ? 1 : 2;
+  offsets.push(bestD*1000); if (offsets.length > 120) offsets.shift();
+  combo++; best = Math.max(best, combo);
+  if (perfect) nPerfect++; else nGood++;
+  life = Math.min(CFG.LIFE_MAX, life + (perfect ? CFG.L_PERFECT : CFG.L_GOOD));
+
+  // 蛍が鳴る＝プレイヤーが旋律を弾いている
+  const at = actx.currentTime + 0.005;
+  // 旋律はそのときの和音から取る（進行があるので、外すと濁る）
+  const bar = Math.floor(hit.t / (BEAT()*4));
+  let mel;
+  if (songSrc){
+    // 曲は Dm と C を1小節ずつ。小節の偶奇で和音が決まる（波形から実測）
+    const ch = CHORDS_SONG[bar % 2];
+    mel = ch.mel[hit.mel % ch.mel.length] * (perfect ? 2 : 1);
+  } else {
+    const ch = CHORDS[Math.floor(bar/2) % CHORDS.length];
+    mel = ch.arp[hit.mel % ch.arp.length] * (perfect ? 2 : 1);
+  }
+  tone(at, mel, perfect ? 0.55 : 0.35, perfect ? "triangle" : "sine",
+       perfect ? 0.13 : 0.09, perfect ? 0.45 : 0.2);
+  hits.push({ x:markX, y:laneY, t:now(), perfect });
+  joinSwarm(perfect, hit.sp);
+
+  // ずかん（§5の音ゲー版）。種ごとに「ぴたりを何匹ぶん続けたか」を数える。
+  // 他の種を挟んでも切れないが、ちかい・見逃しが出たら全部ゼロに戻る。
+  // 混在した譜面でも成立し、意味は「そのリズムを崩さずに通した」で変わらない
+  if (perfect){
+    spRun[hit.sp] = (spRun[hit.sp] || 0) + 1;
+    const sp = SPEC[hit.sp];
+    if (sp && spRun[hit.sp] >= sp.need && !SAVE.dex[sp.id]){
+      SAVE.dex[sp.id] = todayStr();
+      newDex.push(sp.id);
+      tone(actx.currentTime+0.02, 587.33, 1.6, "triangle", 0.09, 0.5, 0.2);
+      tone(actx.currentTime+0.02, 880.00, 1.6, "sine", 0.06, 0.5, 0.25);
+    }
+  } else spRun = {};
+  flash = { t: now(), kind: perfect ? 2 : 1, x: markX, y: laneY };
+
+  // 端末の遅延を夜の入口で自動吸収する（24打まで。以降は腕前が消えるので固定）
+  if (CFG.AUTOCAL && nPerfect + nGood <= 24 && offsets.length >= 6){
+    const r = offsets.slice(-8).slice().sort((a,b)=>a-b);
+    const med = r[r.length>>1];
+    if (Math.abs(med) > 12){
+      CFG.OFFSET = Math.max(-250, Math.min(250, CFG.OFFSET + med*0.30));
+      const el = document.getElementById("s_OFFSET");
+      if (el){ el.value = Math.round(CFG.OFFSET); document.getElementById("v_OFFSET").textContent = Math.round(CFG.OFFSET); }
+    }
+  }
+}
+
+/* ---- 更新 ---- */
+function update(dt){
+  const t = now();
+  // 見逃し
+  for (const n of notes){
+    if (n.judged) continue;
+    if (t > n.t + CFG.W_GOOD + CFG.OFFSET/1000){
+      n.judged = 3; nMiss++;
+      combo = 0;
+      life += CFG.L_MISS * (t < CFG.GRACE ? 0.25 : 1);
+      flash = { t, kind:-1, x:markX, y:laneY };
+      // 揃っていた蛍が少し散る
+      for (let i=0;i<3 && swarm.length;i++) swarm.shift();
+    } else break;
+  }
+  // 命の光は放っておくと減る。合わせ続けるほど余裕が生まれる
+  if (t > 0) life -= CFG.L_DRAIN * dt;
+  life = Math.max(0, Math.min(CFG.LIFE_MAX, life));
+  peakSwarm = Math.max(peakSwarm, swarm.length);
+
+  if (life <= 0)          { endNight("life"); return; }
+  if (t >= CFG.NIGHT)     { endNight("dawn"); return; }
+
+  // 群れの漂いと、離れていく蛍
+  for (const f of swarm){
+    f.life -= dt;
+    f.wob += dt*0.6;
+    f.dir += Math.sin(f.wob)*dt*0.9;
+    f.x += Math.cos(f.dir)*f.spd*dt;
+    f.y += Math.sin(f.dir)*f.spd*dt;
+    if (f.x < -20) f.x = W+20; else if (f.x > W+20) f.x = -20;
+    if (f.y < -20) f.y = H+20; else if (f.y > H+20) f.y = -20;
+  }
+  swarm = swarm.filter(f => f.life > 0);
+  hits = hits.filter(h => t - h.t < 0.5);
+}
+
+/* ---- 描画 ---- */
+const bandFill = document.getElementById("bandFill");
+const countEl  = document.getElementById("count");
+const envelope = e => e < 0 ? 0 : e < 0.06 ? e/0.06 : Math.exp(-(e-0.06)/0.11);
+
+/* 流れてくる蛍を1匹描く。通り道の全域ではっきり見えていないと、
+   蛍の間隔からリズムを読み取れない。目印の上でいちばん強く光る */
+function drawNote(x, dim, spr){
+  const near = Math.max(0, 1 - Math.abs(x - markX)/(spawnX - markX));
+  const glow = Math.pow(near, 3);
+  const r = 9 + glow*19;
+  fgx.globalAlpha = (0.40 + glow*0.55) * (dim || 1);
+  fgx.drawImage(spr || sprGlow, x-r, laneY-r, r*2, r*2);
+}
+
+/* 通り道と目印。
+   2つの円は判定の幅そのもの（内＝ぴたり／外＝ちかい）を実寸で描いている。
+   どれだけ正確に通せばいいかが、説明なしで目に入る */
+function drawLane(t, beat){
+  const speed = (spawnX - markX) / CFG.APPROACH;
+  const rIn  = Math.max(9,  CFG.W_PERFECT * speed);
+  const rOut = Math.max(18, CFG.W_GOOD    * speed);
+  const bp = t > 0 ? Math.exp(-((t/beat)%1)*7) : 0;   // 拍ごとの脈
+
+  // 通り道
+  uix.globalAlpha = 0.055;
+  uix.strokeStyle = "#E8EDF5"; uix.lineWidth = 1;
+  uix.beginPath(); uix.moveTo(markX, laneY); uix.lineTo(W, laneY); uix.stroke();
+
+  // 目印の柱。遠くからでも「ここ」と分かる、やわらかい光
+  fgx.globalAlpha = 0.09 + bp*0.09;
+  fgx.drawImage(sprWarm, markX-38, laneY-96, 76, 192);
+
+  // 門（上下の草）。蛍がここを通り抜ける
+  uix.globalAlpha = 0.34 + bp*0.30;
+  uix.strokeStyle = "#E8EDF5"; uix.lineWidth = 2;
+  uix.lineCap = "round";
+  uix.beginPath();
+  uix.moveTo(markX, laneY-rOut-6);  uix.lineTo(markX, laneY-rOut-30);
+  uix.moveTo(markX, laneY+rOut+6);  uix.lineTo(markX, laneY+rOut+30);
+  uix.stroke();
+  uix.lineCap = "butt";
+
+  // ちかいの幅
+  uix.globalAlpha = 0.16 + bp*0.10;
+  uix.lineWidth = 1;
+  uix.beginPath(); uix.arc(markX, laneY, rOut, 0, Math.PI*2); uix.stroke();
+  // ぴたりの幅
+  uix.globalAlpha = 0.42 + bp*0.34;
+  uix.lineWidth = 1.8;
+  uix.beginPath(); uix.arc(markX, laneY, rIn, 0, Math.PI*2); uix.stroke();
+}
+
+function render(){
+  const t = now();
+  const beat = BEAT();
+
+  // 残像（destination-out で透明に向かって消す）
+  fgx.globalCompositeOperation = "destination-out";
+  fgx.globalAlpha = 1;
+  // 残像を短めに。長いと流れてくる蛍の尾が「複数の蛍」に見えてリズムを誤読する
+  fgx.fillStyle = "rgba(0,0,0,0.40)";
+  fgx.fillRect(0,0,W,H);
+  fgx.globalCompositeOperation = "lighter";
+
+  uix.clearRect(0,0,W,H);
+
+  // 霧。ゆっくり流れる2層。prefers-reduced-motion では動きを止める（仕様§2）
+  {
+    const ft = reduceMotion ? 0 : uiT;
+    const fw = W*1.7, fh = H*0.62, span = W + fw;
+    for (let k = 0; k < 2; k++){
+      const y = H*(0.34 + k*0.30) - fh/2;
+      const x = ((ft*(6+k*4)) % span) - fw;
+      uix.globalAlpha = 0.026 - k*0.008;
+      uix.drawImage(sprFog, x, y, fw, fh);
+      uix.drawImage(sprFog, x + span, y, fw, fh);
+    }
+    uix.globalAlpha = 1;
+  }
+
+  // 群れ：連続で合わせるほど、ばらつきが縮んで一斉に光る
+  if (playing){
+    const tight = Math.max(0, 1 - combo/28);
+    const jit = CFG.JITTER * tight;
+    const beatIdx = Math.floor(t/beat);
+    for (const f of swarm){
+      const bt = (beatIdx)*beat + f.off*jit;
+      if (f.lastBeat !== beatIdx && t >= bt){ f.lastBeat = beatIdx; f.tf = 0; }
+      f.tf += 1/60;
+      const e = envelope(f.tf);
+      const fade = Math.min(1, f.life/3);      // 離れぎわに静かに薄くなる
+      fgx.globalAlpha = 0.06*fade; fgx.drawImage(f.spr, f.x-6, f.y-6, 12, 12);
+      if (e > 0.01){
+        const r = 11 + e*20;
+        fgx.globalAlpha = e*(f.perfect ? 0.55 : 0.42)*fade;
+        fgx.drawImage(f.spr, f.x-r, f.y-r, r*2, r*2);
+      }
+    }
+  }
+
+  // タイトルでも同じ絵を無音で回し続ける。説明文なしでルールが伝わるように
+  if (scene === "title"){
+    const per = 1.2;
+    drawLane(uiT, per);
+    for (let k = 0; k < 3; k++){
+      const nt = (Math.ceil(uiT/per) + k) * per;
+      const x = noteX(nt, uiT);
+      if (x > W + 40 || x < -40) continue;
+      drawNote(x);
+    }
+  }
+
+  // 蛍が右から流れてきて、目印を通り過ぎる瞬間に叩く
+  if (scene === "play"){
+    drawLane(t, beat);
+    for (const n of notes){
+      if (n.t - t > CFG.APPROACH) break;          // まだ画面の外
+      if (n.judged === 1 || n.judged === 2) continue;
+      const x = noteX(n.t, t);
+      if (x < -40) continue;
+      if (n.judged === 3) drawNote(x, 0.3, sprMiss);   // 見逃した蛍は薄いまま流れ去る
+      else               drawNote(x, 1, sprOf(n.sp));
+    }
+  }
+
+  // 命中の弾け
+  for (const h of hits){
+    const p = (t - h.t)/0.5;
+    const r = 14 + p*(h.perfect ? 74 : h.empty ? 26 : 40);
+    uix.globalAlpha = (1-p) * (h.perfect ? 0.34 : h.empty ? 0.10 : 0.18);
+    uix.strokeStyle = h.perfect ? "#E8F5D6" : h.empty ? "#5C6B84" : "#A8E86B";
+    uix.lineWidth = h.perfect ? 1.6 : 1.1;
+    uix.beginPath(); uix.arc(h.x, h.y, r, 0, Math.PI*2); uix.stroke();
+  }
+
+  // 連続した数。目線は目印の上にあるので、その真上に置く
+  if (scene === "play" && combo >= 2){
+    const grow = Math.min(combo, 60)/60;
+    const pop = Math.max(0, 1 - (t - (flash.t||0))/0.22);   // 増えた瞬間だけ跳ねる
+    uix.textAlign = "center";
+    uix.globalAlpha = 0.30 + grow*0.45;
+    uix.fillStyle = combo >= 20 ? "#E8F5D6" : "#A8E86B";
+    uix.font = `300 ${(20 + grow*16 + pop*3).toFixed(1)}px -apple-system,sans-serif`;
+    uix.fillText(combo, markX, laneY - 74);
+    uix.globalAlpha = 0.26;
+    uix.font = "300 9px -apple-system,sans-serif";
+    uix.fillText("つづけて", markX, laneY - 58);
+  }
+
+  // 夜の残り。上端の線が左から満ちていく。残りの蛍の数も添える
+  if (scene === "play"){
+    const p = Math.max(0, Math.min(1, t / CFG.NIGHT));
+    // 左上の「やめる」と右上のボタンを避けて渡す
+    const y = safeTop + 27, pad = 104, right = W - 58;
+    uix.globalAlpha = 0.07;
+    uix.strokeStyle = "#E8EDF5"; uix.lineWidth = 2; uix.lineCap = "round";
+    uix.beginPath(); uix.moveTo(pad, y); uix.lineTo(right, y); uix.stroke();
+    uix.globalAlpha = 0.42;
+    uix.strokeStyle = "#A8E86B";
+    uix.beginPath(); uix.moveTo(pad, y); uix.lineTo(pad + (right-pad)*p, y); uix.stroke();
+    uix.lineCap = "butt";
+    let left = 0;
+    for (const n of notes) if (!n.judged) left++;
+    uix.globalAlpha = 0.34;
+    uix.fillStyle = "#8A94A8";
+    uix.font = "300 10px -apple-system,sans-serif";
+    uix.textAlign = "right";
+    uix.fillText("あと " + left + " 匹", right, y + 19);
+  }
+
+  // 判定の言葉
+  if (flash.kind !== 0 && t - flash.t < 0.55 && flash.x >= 0){
+    const p = (t - flash.t)/0.55;
+    uix.globalAlpha = (1-p)*0.85;
+    uix.fillStyle = flash.kind === 2 ? "#E8F5D6" : flash.kind === 1 ? "#A8E86B" : "#5C6B84";
+    uix.font = "300 12px -apple-system,sans-serif";
+    uix.textAlign = "center";
+    uix.letterSpacing = "3px";
+    // 目印の下。上は連続数が使っている
+    uix.fillText(flash.kind === 2 ? "ぴたり" : flash.kind === 1 ? "ちかい" : "ずれた",
+                 flash.x, flash.y + 56 + p*10);
+  }
+
+  fgx.globalAlpha = 1; fgx.globalCompositeOperation = "source-over";
+  uix.globalAlpha = 1;
+
+  // 下の帯＝命の光。数字は出さない
+  bandFill.style.width = (life/CFG.LIFE_MAX*100).toFixed(0) + "%";
+  bandFill.style.opacity = scene !== "play" ? 0
+    : life < CFG.LIFE_MAX*0.25 ? (0.45 + 0.4*Math.abs(Math.sin(t*3))) : 0.75;
+  if (scene === "play") countEl.innerHTML = `<b>${swarm.length}</b> 匹が同じ息で光っている`;
+
+  // 夜明けが近づくと地平が温まる（残り時間を数字にしないための表示）
+  if (scene === "play"){
+    const d = Math.max(0, Math.min(1, (t/CFG.NIGHT - 0.55) / 0.45));
+    const step = Math.round(d*40);
+    if (step !== dawnStep){ dawnStep = step; drawBg(step/40); }
+  }
+}
+
+/* ---- ループ ---- */
+let fps = 60, fAcc = 0, fN = 0, last = 0, uiT = 0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  if (!last){ last = ts; return; }
+  let dt = (ts-last)/1000; last = ts;
+  if (dt > 0.05) dt = 0.05;
+  uiT += dt;
+  if (playing) update(dt);
+  render();
+  fAcc += dt; fN++;
+  if (fAcc >= 0.5){ fps = fN/fAcc; fAcc = 0; fN = 0; updateStat(); }
+}
+document.addEventListener("visibilitychange", () => {
+  last = 0;
+  if (document.hidden && actx && playing) actx.suspend();
+  else if (actx && playing) actx.resume();
+});
+addEventListener("resize", resize);
+addEventListener("orientationchange", () => setTimeout(resize, 120));
+// iOSはURLバーの出入りで表示領域が変わる。visualViewport の方が確実に届く
+if (window.visualViewport) visualViewport.addEventListener("resize", () => resize());
+addEventListener("pageshow", () => resize());
+
+/* ===========================================================
+   ずかん・つよくする・森のおく
+   =========================================================== */
+const menuEl = document.getElementById("menu");
+const toMenu = document.getElementById("toMenu");
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+function renderMenu(){
+  document.getElementById("mLight").textContent = SAVE.light;
+  document.getElementById("mBest").textContent  = SAVE.best;
+
+  document.getElementById("mDex").innerHTML = SPECIES.map(s => {
+    const got = SAVE.dex[s.id];
+    return `<div class="row ${got?"":"locked"}">
+      <span class="dot" style="background:${got?rgb(s.col):"#2A3346"}"></span>
+      <span class="nm">${got ? s.name : "？？？"}
+        <span class="sub">${got ? s.note+"　"+got : "ひと晩で "+s.need+" 匹をぴたりで（崩さずに）"}</span></span>
+    </div>`;
+  }).join("");
+
+  document.getElementById("mGrow").innerHTML = Object.keys(GROW).map(k => {
+    const g = GROW[k], lv = SAVE.grow[k], max = lv >= g.max;
+    const cost = growCost(lv);
+    return `<div class="row">
+      <span class="nm">${g.name}<span class="sub">${g.note}</span></span>
+      <span class="lv">${lv}</span>
+      <button class="act" data-grow="${k}" ${max||SAVE.light<cost?"disabled":""}>
+        ${max ? "これ以上ない" : "ひかり "+cost}</button>
+    </div>`;
+  }).join("");
+
+  document.getElementById("mStage").innerHTML = STAGES.map(s => {
+    const open = stageOpen(s), cur = SAVE.stage === s.id;
+    return `<div class="row ${open?"":"locked"}">
+      <span class="nm">${s.name}
+        <span class="sub">${open ? "倍率 ×"+s.mult.toFixed(2) : "のべ "+s.need+" 匹でひらく（いま "+SAVE.totalSync+"）"}</span></span>
+      <button class="act ${cur?"cur":""}" data-stage="${s.id}" ${open?"":"disabled"}>
+        ${cur ? "ここにいる" : "ゆく"}</button>
+    </div>`;
+  }).join("");
+}
+menuEl.addEventListener("click", e => {
+  const g = e.target.closest("[data-grow]"), s = e.target.closest("[data-stage]");
+  if (g){
+    const k = g.dataset.grow, lv = SAVE.grow[k], cost = growCost(lv);
+    if (lv < GROW[k].max && SAVE.light >= cost){ SAVE.light -= cost; SAVE.grow[k] = lv+1; saveNow(); renderMenu(); }
+  } else if (s){
+    const st = STAGES.find(x=>x.id===s.dataset.stage);
+    if (st && stageOpen(st)){ SAVE.stage = st.id; saveNow(); renderMenu(); }
+  }
+});
+function openMenu(){ renderMenu(); menuEl.classList.add("on"); }
+function closeMenu(){ menuEl.classList.remove("on"); }
+toMenu.addEventListener("click", e => { e.stopPropagation(); openMenu(); });
+document.getElementById("mClose").addEventListener("click", e => { e.stopPropagation(); closeMenu(); });
+
+/* ===========================================================
+   デバッグUI
+   =========================================================== */
+const dbg = document.getElementById("dbg");
+const SLIDERS = [
+  ["APPROACH", "予告の長さ s", 0.5, 2.5, 0.05],
+  ["W_PERFECT","ぴたり ±s",   0.02,0.10,0.005],
+  ["W_GOOD",   "ちかい ±s",   0.05,0.20,0.005],
+  ["AV",       "音と絵のずれ ms",-250,250, 5],
+  ["OFFSET",   "叩き癖 ms",   -150,150, 1],
+  ["SONG_ADJ", "曲と譜面 ms", -200,200, 1],
+  ["VOL",      "効果音の音量",  0,  1,   0.05],
+  ["SONGVOL",  "曲の音量",      0,  1,   0.05],
+];
+CFG.SONGVOL = SONG.vol;
+dbg.innerHTML = '<div class="stat" id="stat"></div>' +
+  SLIDERS.map(([k,l,mn,mx,st]) =>
+    `<div class="row"><label>${l}<span id="v_${k}"></span></label>` +
+    `<input type="range" id="s_${k}" min="${mn}" max="${mx}" step="${st}"></div>`).join("") +
+  '<canvas id="hist"></canvas>' +
+  '<div class="btns"><button id="clk">拍のクリック</button><button id="rst">最初から</button></div>';
+
+const statEl = document.getElementById("stat");
+const hist = document.getElementById("hist"), hx = hist.getContext("2d");
+function updateStat(){
+  if (!dbg.classList.contains("on")) return;
+  const n = offsets.length;
+  const mean = n ? offsets.reduce((a,b)=>a+b,0)/n : 0;
+  const sd = n>1 ? Math.sqrt(offsets.reduce((a,b)=>a+(b-mean)*(b-mean),0)/n) : 0;
+  const tot = nPerfect+nGood+nMiss;
+  statEl.innerHTML =
+    `ぴたり <b>${nPerfect}</b>　ちかい <b>${nGood}</b>　見逃し <b>${nMiss}</b><br>` +
+    `連続 <b>${combo}</b>（最高 ${best}）　群れ <b>${swarm.length}</b>（最大 ${peakSwarm}）<br>` +
+    `命 <b>${life.toFixed(0)}</b>　残り <b>${Math.max(0, CFG.NIGHT - now()).toFixed(0)}</b>s<br>` +
+    `出力遅延 <b>${(LAT*1000).toFixed(0)}</b>ms　叩き癖 <b>${CFG.OFFSET.toFixed(0)}</b>ms<br>` +
+    `ズレ 平均 <b>${mean.toFixed(0)}</b>ms　ばらつき <b>${sd.toFixed(0)}</b>ms<br>` +
+    `精度 <b>${tot?Math.round(nPerfect/tot*100):0}</b>%　fps <b>${fps.toFixed(0)}</b>`;
+  // タイミングのヒストグラム（中央が0ms、左右±150ms）
+  const w = hist.width = hist.clientWidth*2, h = hist.height = 88;
+  hx.clearRect(0,0,w,h);
+  hx.fillStyle = "rgba(232,237,245,0.10)"; hx.fillRect(w/2-1,0,2,h);
+  hx.fillStyle = "rgba(168,232,107,0.16)";
+  hx.fillRect(w/2 - CFG.W_PERFECT*1000/150*(w/2), 0, CFG.W_PERFECT*2000/150*(w/2), h);
+  for (const o of offsets){
+    const px = w/2 + o/150*(w/2);
+    hx.fillStyle = Math.abs(o) <= CFG.W_PERFECT*1000 ? "#A8E86B" : "#6F8A5C";
+    hx.fillRect(px-1, h/2-12, 2, 24);
+  }
+}
+for (const [k,,mn,mx,st] of SLIDERS){
+  const el = document.getElementById("s_"+k), out = document.getElementById("v_"+k);
+  const sync = () => out.textContent = CFG[k];
+  el.min=mn; el.max=mx; el.step=st; el.value = CFG[k]; sync();
+  el.addEventListener("input", () => {
+    CFG[k] = parseFloat(el.value); sync();
+    if (k === "VOL" && master) master.gain.value = CFG.VOL;
+    if (k === "SONGVOL"){ SONG.vol = CFG.SONGVOL; if (musicGain) musicGain.gain.value = SONG.vol; }
+    if (k === "SONG_ADJ" && songSrc) t0 += 0;   // 次の夜から反映
+  });
+}
+const clkBtn = document.getElementById("clk");
+const syncClk = () => clkBtn.classList.toggle("on", !!CFG.CLICK);
+syncClk();
+clkBtn.addEventListener("click", e => { e.stopPropagation(); CFG.CLICK = CFG.CLICK ? 0 : 1; syncClk(); });
+document.getElementById("rst").addEventListener("click", e => { e.stopPropagation(); toTitle(); });
+document.getElementById("dbgBtn").addEventListener("click", e => {
+  e.stopPropagation(); dbg.classList.toggle("on"); updateStat();
+});
+
+/* ---- 起動 ---- */
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
