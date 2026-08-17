@@ -619,6 +619,14 @@ function musicStep(i, at){
 let schedStep = 0, schedTimer = 0;
 function scheduler(){
   if (!actx) return;
+  // 画面が隠れると requestAnimationFrame は止まるが、曲は鳴り続けてしまう。
+  // 戻ってきたときに大量の見逃しが発生するので、ここで確実に止める。
+  // visibilitychange だけに頼ると、隠れた状態で夜が始まった場合に取りこぼす
+  if (playing && document.hidden){
+    if (actx.state === "running") actx.suspend();
+    return;
+  }
+  if (playing && actx.state === "suspended") actx.resume();
   syncClock();
   if (!playing) return;
   const step = BEAT()/2, ahead = 0.25;
@@ -1234,11 +1242,8 @@ function loop(ts){
   fAcc += dt; fN++;
   if (fAcc >= 0.5){ fps = fN/fAcc; fAcc = 0; fN = 0; updateStat(); }
 }
-document.addEventListener("visibilitychange", () => {
-  last = 0;
-  if (document.hidden && actx && playing) actx.suspend();
-  else if (actx && playing) actx.resume();
-});
+// 実際の停止・再開は scheduler が毎回確かめる。ここでは dt を捨てるだけ
+document.addEventListener("visibilitychange", () => { last = 0; });
 addEventListener("resize", resize);
 addEventListener("orientationchange", () => setTimeout(resize, 120));
 // iOSはURLバーの出入りで表示領域が変わる。visualViewport の方が確実に届く
