@@ -1,2 +1,5 @@
 # 引き込みモデル版（音ゲーに作り変える前の試作）。手元には残すが公開はしない
 index-entrainment.html
+
+# macOSが勝手に作るファイル
+.DS_Store
