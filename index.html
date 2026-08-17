@@ -190,6 +190,12 @@
   #dbg button{flex:1;padding:6px 4px;border:1px solid rgba(232,237,245,.14);
     border-radius:7px;background:transparent;color:var(--ink-mute);font-size:10px}
   #dbg button.on{color:#080D18;background:var(--glow);border-color:var(--glow)}
+  #dbg .avrow{display:flex;align-items:center;gap:6px;margin:2px 0 12px}
+  #dbg .avrow button{flex:1;padding:12px 4px;min-height:44px;font-size:11px;
+    border:1px solid rgba(168,232,107,.5);border-radius:9px;
+    background:rgba(168,232,107,.08);color:var(--glow);font-family:inherit}
+  #dbg .avrow span{flex:0 0 52px;text-align:center;font-size:16px;color:var(--ink);
+    font-variant-numeric:tabular-nums}
   #hist{width:100%;height:44px;display:block;margin-top:8px;border-radius:6px;
     background:rgba(232,237,245,.04)}
 </style>
@@ -582,7 +588,8 @@ function musicStep(i, at){
   // ただしこの曲には低音のキックが無いので、拍のクリックだけ薄く重ねられるようにしておく
   if (songSrc){
     if (bar === 0){ if (s % 2 === 0) tone(at, 1320, 0.07, "triangle", 0.10); return; }
-    if (CFG.CLICK && (s === 0 || s === 4)) tone(at, 990, 0.045, "triangle", 0.030);
+    // 目印の脈は毎拍なので、クリックも毎拍にする（ずれ合わせの比較対象になるため）
+    if (CFG.CLICK && s % 2 === 0) tone(at, 990, 0.045, "triangle", s % 4 === 0 ? 0.032 : 0.022);
     return;
   }
 
@@ -650,6 +657,7 @@ const MID  = "x.x.x.x.";
 // 縮む輪をやめた理由：重なる瞬間が知覚的に弱く、複数あるとどれが次か分からない。
 // 直線運動なら到達時刻を目で正確に読めるうえ、蛍の間隔がそのままリズムに見える
 let laneY = 0, markX = 0, spawnX = 0;
+let dbgOpen = false;
 const MARK_R = 16;
 
 let notes = [];
@@ -1052,7 +1060,9 @@ function drawLane(t, beat){
   const speed = (spawnX - markX) / CFG.APPROACH;
   const rIn  = Math.max(9,  CFG.W_PERFECT * speed);
   const rOut = Math.max(18, CFG.W_GOOD    * speed);
-  const bp = t > 0 ? Math.exp(-((t/beat)%1)*7) : 0;   // 拍ごとの脈
+  // 拍ごとの脈。調整パネルを開いている間は強くする（クリック音と見比べるため）
+  let bp = t > 0 ? Math.exp(-((t/beat)%1)*7) : 0;
+  if (dbgOpen) bp = Math.min(1, bp * 2.4);
 
   // 通り道
   uix.globalAlpha = 0.055;
@@ -1324,6 +1334,10 @@ const SLIDERS = [
 ];
 CFG.SONGVOL = SONG.vol;
 dbg.innerHTML = '<div class="stat" id="stat"></div>' +
+  // ずれ合わせは指で細いスライダーを掴むのが難しいので、押しやすいボタンを別に置く
+  '<div class="avrow"><button id="avm">− 絵を早く</button>' +
+  '<span id="avv">0</span>' +
+  '<button id="avp">絵を遅く +</button></div>' +
   SLIDERS.map(([k,l,mn,mx,st]) =>
     `<div class="row"><label>${l}<span id="v_${k}"></span></label>` +
     `<input type="range" id="s_${k}" min="${mn}" max="${mx}" step="${st}"></div>`).join("") +
@@ -1368,13 +1382,26 @@ for (const [k,,mn,mx,st] of SLIDERS){
     if (k === "SONG_ADJ" && songSrc) t0 += 0;   // 次の夜から反映
   });
 }
+/* 音と絵のずれ。押した瞬間から効くので、鳴らしながら合わせられる */
+const avv = document.getElementById("avv");
+function setAV(v){
+  CFG.AV = Math.max(-250, Math.min(250, v));
+  avv.textContent = CFG.AV;
+  const s = document.getElementById("s_AV");
+  if (s){ s.value = CFG.AV; document.getElementById("v_AV").textContent = CFG.AV; }
+  saveNow();
+}
+document.getElementById("avm").addEventListener("click", e => { e.stopPropagation(); setAV(CFG.AV - 20); });
+document.getElementById("avp").addEventListener("click", e => { e.stopPropagation(); setAV(CFG.AV + 20); });
+setAV(CFG.AV);
+
 const clkBtn = document.getElementById("clk");
 const syncClk = () => clkBtn.classList.toggle("on", !!CFG.CLICK);
 syncClk();
 clkBtn.addEventListener("click", e => { e.stopPropagation(); CFG.CLICK = CFG.CLICK ? 0 : 1; syncClk(); });
 document.getElementById("rst").addEventListener("click", e => { e.stopPropagation(); toTitle(); });
 document.getElementById("dbgBtn").addEventListener("click", e => {
-  e.stopPropagation(); dbg.classList.toggle("on"); updateStat();
+  e.stopPropagation(); dbg.classList.toggle("on"); dbgOpen = dbg.classList.contains("on"); updateStat();
 });
 
 /* ---- 起動 ---- */
