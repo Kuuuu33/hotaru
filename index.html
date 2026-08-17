@@ -152,6 +152,11 @@
   #menu .dot{width:11px;height:11px;border-radius:6px;flex:0 0 11px}
   #menu .nm{color:var(--ink);flex:1;line-height:1.45}
   #menu .sub{font-size:11.5px;display:block;color:#98A3B8;letter-spacing:.02em;margin-top:3px}
+  #menu .howto{font-size:11.5px;line-height:1.85;color:#98A3B8;padding:12px 0 4px}
+  #menu .howto b{color:var(--glow);font-weight:400}
+  #menu .bar{display:block;height:3px;border-radius:2px;margin-top:6px;
+    background:rgba(232,237,245,.10);overflow:hidden;max-width:190px}
+  #menu .bar i{display:block;height:100%;background:var(--glow);opacity:.75}
   #menu .row.locked .nm{color:#98A3B8}
   #menu .row.locked .sub{color:#6E7789}
   #menu button.act{
@@ -229,6 +234,7 @@
   <div class="mhead" style="font-size:12px;opacity:.6">いちばん多い夜　<b id="mBest" style="font-size:15px">0</b> 匹</div>
   <div class="mt">ずかん</div><div id="mDex"></div>
   <div class="mt">つよくする</div><div id="mGrow"></div>
+  <div class="mt">きょく</div><div id="mSong"></div>
   <div class="mt">森のおく</div><div id="mStage"></div>
   <button id="mClose">とじる</button>
   <div class="credit">ほたる合わせ　制作 くぅ<br>音楽は Suno で制作しました</div>
@@ -248,19 +254,21 @@
    未実装 : 命ゲージ・75秒・結果画面・ずかん・育成・ステージ・保存
    =========================================================== */
 
-/* 曲。波形から実測した値（測り直したいときは §測定 のメモを参照）
-   BPM 91.000 / 1拍目 0.0107秒 / 1小節 2.6374秒 / Dm と C を1小節ずつ（Dドリアン） */
-const SONG = {
-  url    : "song.m4a",
-  bpm    : 91.000,
-  offset : 0.0107,   // 曲の先頭から1拍目までの秒数
-  bars   : 31,       // 使う小節数（31小節＝81.8秒）
-  vol    : 0.62,     // そのままだとゲームの音が埋もれるので下げる
-};
-const CHORDS_SONG = [
-  { name:"Dm", mel:[293.66, 349.23, 440.00, 523.25, 587.33] },  // D F A C D
-  { name:"C",  mel:[261.63, 329.63, 392.00, 493.88, 523.25] },  // C E G B C
+/* 曲。すべて波形から実測した値。差し替えるときは bpm / offset / bars を測り直すこと。
+   mel は小節ごとの和音（偶数小節→[0]、奇数小節→[1]）。プレイヤーの打鍵音をここから取る */
+const SONGS = [
+  { id:"koto", title:"Forest Koto Drift", url:"song.m4a",
+    bpm:91.000, offset:0.0107, bars:31,          // Dドリアン Dm↔C
+    mel:[[293.66,349.23,440.00,523.25,587.33],
+         [261.63,329.63,392.00,493.88,523.25]] },
+  { id:"rice", title:"Fireflies on Rice", url:"song2.m4a",
+    bpm:94.000, offset:0.6347, bars:32,          // Eマイナー Em↔G
+    mel:[[329.63,392.00,493.88,587.33,659.26],
+         [392.00,493.88,587.33,659.26,783.99]] },
 ];
+let songIdx = 0;
+let songVol = 0.62;              // そのままだとゲームの音が埋もれるので下げる
+const CUR = () => SONGS[songIdx];
 
 const CFG = {
   BPM      : 91,
@@ -331,9 +339,9 @@ const BEAT = () => 60 / CFG.BPM;
 
 /* 保存（§6）。壊れていたら黙って初期値で始める。書くのは夜明けと育成のときだけ */
 const SAVE_KEY = "hotaru:save";
-const SAVE = { v:2, best:0, totalSync:0, light:0, stage:"tanbo",
-               grow:{power:1, range:1, life:1}, dex:{},
-               av:0, offset:0, songvol:SONG.vol, click:1 };
+const SAVE = { v:2, best:0, totalSync:0, light:0, stage:"tanbo", song:"koto",
+               grow:{power:1, range:1, life:1}, dex:{}, dexBest:{},
+               av:0, offset:0, songvol:songVol, click:1 };
 function loadSave(){
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
@@ -343,14 +351,19 @@ function loadSave(){
     if (s.grow) for (const k in SAVE.grow)
       if (typeof s.grow[k]==="number") SAVE.grow[k]=Math.max(1,Math.min(GROW[k].max,s.grow[k]|0));
     if (s.dex && typeof s.dex==="object") for (const k in s.dex) if (SPEC[k]) SAVE.dex[k]=String(s.dex[k]);
+    if (s.dexBest && typeof s.dexBest==="object")
+      for (const k in s.dexBest) if (SPEC[k] && typeof s.dexBest[k]==="number") SAVE.dexBest[k]=s.dexBest[k]|0;
+    if (typeof s.song === "string" && SONGS.some(g=>g.id===s.song)) SAVE.song = s.song;
     for (const k of ["av","offset","songvol","click"]) if (typeof s[k]==="number") SAVE[k]=s[k];
   } catch(e){}
   CFG.AV = SAVE.av; CFG.OFFSET = SAVE.offset;
-  SONG.vol = SAVE.songvol; CFG.CLICK = SAVE.click;
+  songVol = SAVE.songvol; CFG.CLICK = SAVE.click;
+  const si = SONGS.findIndex(g => g.id === SAVE.song);
+  if (si >= 0) songIdx = si;
 }
 function saveNow(){
   SAVE.av = Math.round(CFG.AV); SAVE.offset = Math.round(CFG.OFFSET);
-  SAVE.songvol = +SONG.vol.toFixed(2); SAVE.click = CFG.CLICK;
+  SAVE.songvol = +songVol.toFixed(2); SAVE.click = CFG.CLICK;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch(e){}
 }
 const stageOf = id => STAGES.find(s=>s.id===id) || STAGES[0];
@@ -477,10 +490,23 @@ let musicGain = null, songSrc = null;
 
 /* 曲の読み込み。ページを開いた時点で取りに行き、最初のタップで復号する
    （AudioContext は操作があるまで作れないため）。失敗したら合成の伴奏に戻す */
-let songAB = null, songBuf = null, songState = "loading";   // loading / ready / failed
-fetch(SONG.url).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status)))
-  .then(ab => { songAB = ab; })
-  .catch(() => { songState = "failed"; });
+// 曲ごとに「取得したデータ」と「復号したもの」を持つ。選ばれた曲だけを読む
+const songData = {};                       // id → {ab, buf, state}
+const songOf = i => songData[SONGS[i].id] || (songData[SONGS[i].id] = {ab:null, buf:null, state:"idle"});
+function loadSong(i){
+  const s = songOf(i), meta = SONGS[i];
+  if (s.state === "ready" || s.state === "loading") return;
+  s.state = "loading";
+  fetch(meta.url)
+    .then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status)))
+    .then(ab => {
+      s.ab = ab;
+      if (!actx) return;                    // 復号は AudioContext ができてから
+      return actx.decodeAudioData(ab.slice(0)).then(b => { s.buf = b; s.state = "ready"; });
+    })
+    .catch(() => { s.state = "failed"; });
+}
+loadSong(0);                                // 1曲目だけ先に取りに行く
 let LAT = 0;                        // 端末の出力遅延(秒)。起動時に一度だけ決めて動かさない
 
 /* 和音進行。Am → F → C → G を2小節ずつ。夏の夜に合う静かな循環 */
@@ -502,7 +528,7 @@ function ensureAudio(){
   master.gain.value = CFG.VOL;
   master.connect(actx.destination);
   musicGain = actx.createGain();          // 曲は別系統。ゲームの音とは独立に上下させる
-  musicGain.gain.value = SONG.vol;
+  musicGain.gain.value = songVol;
   musicGain.connect(actx.destination);
   // 付点8分のディレイ。合成音でも「空間」が出て曲らしく聞こえる
   delay = actx.createDelay(1.0);
@@ -522,10 +548,15 @@ function ensureAudio(){
   const lat = actx.outputLatency || actx.baseLatency || 0;
   LAT = (isFinite(lat) && lat > 0 && lat < 0.4) ? lat : 0;
 
-  if (songAB && songState === "loading"){
-    actx.decodeAudioData(songAB.slice(0))
-      .then(b => { songBuf = b; songState = "ready"; })
-      .catch(() => { songState = "failed"; });
+  // 先に取得だけ済んでいた曲を、ここで復号する
+  for (let i = 0; i < SONGS.length; i++){
+    const s = songOf(i);
+    if (s.ab && !s.buf && s.state !== "failed"){
+      s.state = "loading";
+      actx.decodeAudioData(s.ab.slice(0))
+        .then(b => { s.buf = b; s.state = "ready"; })
+        .catch(() => { s.state = "failed"; });
+    }
   }
 }
 function tone(at, f, dur, type, gain, send, attack){
@@ -745,7 +776,7 @@ let hits = [];                      // 命中の弾け
 let life = 0, peakSwarm = 0;
 let scene = "title";                // title / play / result
 let resultAt = 0;                   // 結果画面を出した実時刻（誤爆防止）
-let spRun = {}, newDex = [];
+let spRun = {}, spNight = {}, newDex = [];
 const todayStr = () => { const d = new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 
@@ -770,7 +801,7 @@ function startNight(){
   CFG.LIFE_MAX  = 100   + (g.life -1) * 11.4;     // Lv8で 180
   const st = stageOf(SAVE.stage);
   CFG.L_DRAIN = 0.8 * (st.drain || 1);
-  spRun = {}; newDex = [];
+  spRun = {}; spNight = {}; newDex = [];
 
   life = CFG.LIFE_MAX; peakSwarm = 0;
   dawnStep = -1; drawBg(0);
@@ -778,15 +809,16 @@ function startNight(){
 
   // 曲があれば、曲の1拍目を音楽時刻ゼロに合わせて鳴らす
   if (songSrc){ try { songSrc.stop(); } catch(e){} songSrc = null; }
+  const songBuf = songOf(songIdx).buf;
   if (songBuf){
-    CFG.BPM  = SONG.bpm;
-    CFG.NIGHT = SONG.bars * 4 * (60/SONG.bpm);
+    CFG.BPM  = CUR().bpm;
+    CFG.NIGHT = CUR().bars * 4 * (60/CUR().bpm);
     const startAt = actx.currentTime + 0.6;
     songSrc = actx.createBufferSource();
     songSrc.buffer = songBuf;
     songSrc.connect(musicGain);
     songSrc.start(startAt);
-    t0 = startAt + SONG.offset + CFG.SONG_ADJ/1000;   // ここが音楽時刻の原点
+    t0 = startAt + CUR().offset + CFG.SONG_ADJ/1000;   // ここが音楽時刻の原点
   } else {
     CFG.NIGHT = 75;
     t0 = actx.currentTime + 1.0;
@@ -819,7 +851,7 @@ function endNight(reason){
       songSrc.stop(at + 2.6);
     } catch(e){}
     songSrc = null;
-    setTimeout(() => { if (musicGain) musicGain.gain.value = SONG.vol; }, 3200);
+    setTimeout(() => { if (musicGain) musicGain.gain.value = songVol; }, 3200);
     // 夜明けの和音は曲のキー（Dドリアン）で
     for (const f of [293.66, 349.23, 440.00]) tone(at, f, 3.4, "sine", 0.05, 0.3, 0.3);
     tone(at, 146.83, 3.8, "sine", 0.05, 0, 0.2);
@@ -839,6 +871,8 @@ function endNight(reason){
   SAVE.best = Math.max(SAVE.best, peakSwarm);
   SAVE.totalSync += peakSwarm;
   SAVE.light += light;
+  for (const id in spNight)
+    if (spNight[id] > (SAVE.dexBest[id]||0)) SAVE.dexBest[id] = spNight[id];
 
   document.getElementById("r1").textContent =
     reason === "life" ? "光が尽きた" : "夜が明ける";
@@ -846,6 +880,14 @@ function endNight(reason){
     `今夜、<b>${peakSwarm}</b>匹が同じ息で光った`;
   let r3 = `${st.name} <b>×${mult.toFixed(2)}</b>　ひかり <b>+${light}</b>`;
   if (newDex.length) r3 += `<br><span style="color:#A8E86B">${newDex.map(id=>SPEC[id].name).join("、")} をおぼえた</span>`;
+  // まだ覚えていない種のうち、今夜いちばん惜しかったものを1つ出す。
+  // 「何をすれば図鑑が埋まるのか」がこれまでどこにも書いてなかった
+  let near = null;
+  for (const id in spNight){
+    if (SAVE.dex[id] || newDex.includes(id)) continue;
+    if (!near || spNight[id]/SPEC[id].need > spNight[near]/SPEC[near].need) near = id;
+  }
+  if (near) r3 += `<br><span style="font-size:11px">${SPEC[near].name}　つづけて <b>${spNight[near]}</b> / ${SPEC[near].need} 匹</span>`;
   const opened = STAGES.find(s => s.need > 0 && SAVE.totalSync >= s.need && SAVE.totalSync - peakSwarm < s.need);
   if (opened) r3 += `<br><span style="color:#A8E86B">${opened.name} への道がひらけた</span>`;
   document.getElementById("r3").innerHTML = r3;
@@ -865,10 +907,10 @@ function toTitle(){
   clearInterval(schedTimer);
   playing = false; scene = "title";
   if (songSrc){ try { songSrc.stop(); } catch(e){} songSrc = null; }
-  if (musicGain) musicGain.gain.value = SONG.vol;
+  if (musicGain) musicGain.gain.value = songVol;
   notes = []; swarm = []; hits = []; offsets.length = 0;
   combo = 0; best = 0; nPerfect = nGood = nMiss = 0;
-  life = 0; peakSwarm = 0; spRun = {}; newDex = [];
+  life = 0; peakSwarm = 0; spRun = {}; spNight = {}; newDex = [];
   dawnStep = -1; drawBg(0); fgx.clearRect(0,0,W,H);
   titleEl.classList.remove("gone");
   resultEl.classList.remove("on");
@@ -900,11 +942,13 @@ function onTap(ev){
   ensureAudio();
   if (actx.state === "suspended") actx.resume();
   if (scene === "title"){
-    // 曲の復号が終わっていなければ待ってから始める（合成の伴奏で始めてしまわないように）
-    if (songState === "loading"){
+    // 曲の用意ができていなければ待ってから始める（合成の伴奏で始めてしまわないように）
+    loadSong(songIdx);
+    if (songOf(songIdx).state !== "ready" && songOf(songIdx).state !== "failed"){
       titleEl.querySelector("p").textContent = "よみこみ中";
       const wait = setInterval(() => {
-        if (songState !== "loading"){
+        const st = songOf(songIdx).state;
+        if (st === "ready" || st === "failed"){
           clearInterval(wait);
           titleEl.querySelector("p").textContent = "タップ";
           startNight();
@@ -963,8 +1007,8 @@ function judge(tapT, tx, ty){
   let mel;
   if (songSrc){
     // 曲は Dm と C を1小節ずつ。小節の偶奇で和音が決まる（波形から実測）
-    const ch = CHORDS_SONG[bar % 2];
-    mel = ch.mel[hit.mel % ch.mel.length] * (perfect ? 2 : 1);
+    const ms = CUR().mel[bar % 2];
+    mel = ms[hit.mel % ms.length] * (perfect ? 2 : 1);
   } else {
     const ch = CHORDS[Math.floor(bar/2) % CHORDS.length];
     mel = ch.arp[hit.mel % ch.arp.length] * (perfect ? 2 : 1);
@@ -979,6 +1023,8 @@ function judge(tapT, tx, ty){
   // 混在した譜面でも成立し、意味は「そのリズムを崩さずに通した」で変わらない
   if (perfect){
     spRun[hit.sp] = (spRun[hit.sp] || 0) + 1;
+    // その夜の最高記録。ずかんに「5 / 8匹」と出して、あとどれだけかを見せる
+    if ((spRun[hit.sp]||0) > (spNight[hit.sp]||0)) spNight[hit.sp] = spRun[hit.sp];
     const sp = SPEC[hit.sp];
     if (sp && spRun[hit.sp] >= sp.need && !SAVE.dex[sp.id]){
       SAVE.dex[sp.id] = todayStr();
@@ -1273,14 +1319,22 @@ function renderMenu(){
   document.getElementById("mLight").textContent = SAVE.light;
   document.getElementById("mBest").textContent  = SAVE.best;
 
-  document.getElementById("mDex").innerHTML = SPECIES.map(s => {
-    const got = SAVE.dex[s.id];
-    return `<div class="row ${got?"":"locked"}">
-      <span class="dot" style="background:${got?rgb(s.col):"#2A3346"}"></span>
-      <span class="nm">${got ? s.name : "？？？"}
-        <span class="sub">${got ? s.note+"　"+got : "ひと晩で "+s.need+" 匹をぴたりで（崩さずに）"}</span></span>
-    </div>`;
-  }).join("");
+  document.getElementById("mDex").innerHTML =
+    '<div class="howto">同じ種の蛍を、<b>ぴたりを外さずに</b>つづけて合わせると覚えます。<br>' +
+    'ちかい・見逃しが1回でも出ると、数えなおしになります。</div>' +
+    SPECIES.map(s => {
+      const got = SAVE.dex[s.id];
+      const bestN = Math.min(SAVE.dexBest[s.id] || 0, s.need);
+      const pct = Math.round(bestN / s.need * 100);
+      return `<div class="row ${got?"":"locked"}">
+        <span class="dot" style="background:${got?rgb(s.col):"#2A3346"}"></span>
+        <span class="nm">${got ? s.name : "？？？"}
+          <span class="sub">${got
+            ? s.note + "　" + got
+            : "つづけて <b style='color:#A8E86B'>"+bestN+"</b> / "+s.need+" 匹"
+              + "<span class='bar'><i style='width:"+pct+"%'></i></span>"}</span></span>
+      </div>`;
+    }).join("");
 
   document.getElementById("mGrow").innerHTML = Object.keys(GROW).map(k => {
     const g = GROW[k], lv = SAVE.grow[k], max = lv >= g.max;
@@ -1290,6 +1344,15 @@ function renderMenu(){
       <span class="lv">${lv}</span>
       <button class="act" data-grow="${k}" ${max||SAVE.light<cost?"disabled":""}>
         ${max ? "これ以上ない" : "ひかり "+cost}</button>
+    </div>`;
+  }).join("");
+
+  document.getElementById("mSong").innerHTML = SONGS.map((s, i) => {
+    const cur = songIdx === i;
+    return `<div class="row">
+      <span class="nm">${s.title}
+        <span class="sub">${s.bpm.toFixed(0)} BPM　${Math.round(s.bars*4*60/s.bpm)}秒</span></span>
+      <button class="act ${cur?"cur":""}" data-song="${i}">${cur ? "これで遊ぶ" : "えらぶ"}</button>
     </div>`;
   }).join("");
 
@@ -1305,6 +1368,14 @@ function renderMenu(){
 }
 menuEl.addEventListener("click", e => {
   const g = e.target.closest("[data-grow]"), s = e.target.closest("[data-stage]");
+  const so = e.target.closest("[data-song]");
+  if (so){
+    songIdx = +so.dataset.song;
+    SAVE.song = SONGS[songIdx].id;
+    loadSong(songIdx);                 // 選んだ時点で取りに行く。始めるときに待たされない
+    saveNow(); renderMenu();
+    return;
+  }
   if (g){
     const k = g.dataset.grow, lv = SAVE.grow[k], cost = growCost(lv);
     if (lv < GROW[k].max && SAVE.light >= cost){ SAVE.light -= cost; SAVE.grow[k] = lv+1; saveNow(); renderMenu(); }
@@ -1332,7 +1403,7 @@ const SLIDERS = [
   ["VOL",      "効果音の音量",  0,  1,   0.05],
   ["SONGVOL",  "曲の音量",      0,  1,   0.05],
 ];
-CFG.SONGVOL = SONG.vol;
+CFG.SONGVOL = songVol;
 dbg.innerHTML = '<div class="stat" id="stat"></div>' +
   // ずれ合わせは指で細いスライダーを掴むのが難しいので、押しやすいボタンを別に置く
   '<div class="avrow"><button id="avm">− 絵を早く</button>' +
@@ -1378,7 +1449,7 @@ for (const [k,,mn,mx,st] of SLIDERS){
   el.addEventListener("input", () => {
     CFG[k] = parseFloat(el.value); sync();
     if (k === "VOL" && master) master.gain.value = CFG.VOL;
-    if (k === "SONGVOL"){ SONG.vol = CFG.SONGVOL; if (musicGain) musicGain.gain.value = SONG.vol; }
+    if (k === "SONGVOL"){ songVol = CFG.SONGVOL; if (musicGain) musicGain.gain.value = songVol; }
     if (k === "SONG_ADJ" && songSrc) t0 += 0;   // 次の夜から反映
   });
 }
