@@ -91,6 +91,10 @@
     animation:breathe 3.4s ease-in-out infinite}
   @keyframes breathe{0%,100%{opacity:.30}50%{opacity:.72}}
   #title.gone{opacity:0}
+  #readmore{margin-top:4px;font-size:10.5px;letter-spacing:.16em;color:var(--ink-mute);
+    opacity:.42;text-decoration:none;pointer-events:auto;padding:10px 14px}
+  #readmore:active{opacity:.8}
+  #title.gone #readmore{pointer-events:none}
   @media (prefers-reduced-motion: reduce){
     #title p{animation:none;opacity:.5}
   }
@@ -218,6 +222,7 @@
 <div id="title">
   <h1>ほたる合わせ</h1>
   <p>タップ</p>
+  <a id="readmore" href="https://note.com/claude_lab_kuu/n/n8d60d5574f5e?ref=hotaru" target="_blank" rel="noopener">このゲームの作り方を読む →</a>
 </div>
 
 <div id="result">
@@ -967,12 +972,12 @@ function onTap(ev){
 }
 let tapX = 0, tapY = 0;
 addEventListener("touchstart", e => {
-  if (e.target.closest("#dbg,#dbgBtn,#menu,#toMenu,#quit")) return;
+  if (e.target.closest("#dbg,#dbgBtn,#menu,#toMenu,#quit,#readmore")) return;
   const t = e.changedTouches[0]; tapX = t.clientX; tapY = t.clientY;
   onTap(e); e.preventDefault();
 }, {passive:false});
 addEventListener("mousedown",  e => {
-  if (e.target.closest("#dbg,#dbgBtn,#menu,#toMenu,#quit")) return;
+  if (e.target.closest("#dbg,#dbgBtn,#menu,#toMenu,#quit,#readmore")) return;
   tapX = e.clientX; tapY = e.clientY; onTap(e);
 });
 addEventListener("contextmenu", e => e.preventDefault());
